@@ -63,7 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem('user');
     setUser(null);
     toast.success('Logged out successfully');
-    router.push('/');
+    router.push('/login');
   };
 
   return (
