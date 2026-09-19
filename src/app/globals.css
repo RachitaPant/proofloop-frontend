@@ -4,11 +4,33 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 220 45% 99%;
+    --foreground: 222 47% 11%;
   }
 
   body {
-    @apply bg-gray-50 text-gray-900;
+    @apply bg-surface-50 text-navy-900 font-sans antialiased;
+  }
+
+  h1, h2, h3, h4 {
+    @apply font-display;
+  }
+
+  ::selection {
+    @apply bg-brand-200 text-navy-900;
+  }
+}
+
+@layer utilities {
+  .skeleton {
+    @apply bg-surface-200 rounded-md relative overflow-hidden;
+    background-image: linear-gradient(
+      90deg,
+      theme('colors.surface.200') 0px,
+      theme('colors.surface.100') 40px,
+      theme('colors.surface.200') 80px
+    );
+    background-size: 800px 100%;
+    @apply animate-shimmer;
   }
 }
