@@ -32,10 +32,11 @@ const sizeClasses: Record<Size, string> = {
 };
 
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ variant = 'primary', size = 'md', loading, disabled, className, children, ...props }, ref) => {
+  ({ variant = 'primary', size = 'md', loading, disabled, className, type = 'button', children, ...props }, ref) => {
     return (
       <button
         ref={ref}
+        type={type}
         disabled={disabled || loading}
         className={cn(
           'inline-flex items-center justify-center font-medium transition-colors duration-150',

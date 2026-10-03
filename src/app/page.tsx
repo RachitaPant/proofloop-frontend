@@ -31,7 +31,13 @@ import {
 } from 'lucide-react';
 import Button from '@/components/ui/Button';
 
-const NAV_LINKS = ['Product', 'Use Cases', 'Features', 'Pricing', 'Docs'];
+// Only link to sections that actually exist on this page — no placeholder
+// "Pricing"/"Docs" nav items pointing nowhere.
+const NAV_LINKS = [
+  { label: 'Product', href: '#product' },
+  { label: 'Features', href: '#features' },
+  { label: 'Use Cases', href: '#industries' },
+];
 
 const TRUSTED_LOGOS = ['Google', 'Microsoft', 'Notion', 'Slack', 'GitHub', 'Vercel'];
 
@@ -103,8 +109,8 @@ function Nav() {
         </Link>
         <div className="hidden md:flex items-center gap-8 text-sm font-medium text-navy-600">
           {NAV_LINKS.map((l) => (
-            <a key={l} href="#" className="hover:text-navy-900">
-              {l}
+            <a key={l.href} href={l.href} className="hover:text-navy-900">
+              {l.label}
             </a>
           ))}
         </div>
@@ -318,10 +324,12 @@ export default function LandingPage() {
                   Get Started Free <ArrowRight className="w-4 h-4" />
                 </Button>
               </Link>
-              <Button size="lg" variant="outline">
-                <PlayCircle className="w-4 h-4" />
-                View Demo
-              </Button>
+              <a href="#features">
+                <Button size="lg" variant="outline">
+                  <PlayCircle className="w-4 h-4" />
+                  See How It Works
+                </Button>
+              </a>
             </div>
             <div className="flex flex-wrap gap-x-6 gap-y-2 mt-7 text-sm text-navy-500">
               <span className="flex items-center gap-1.5">
@@ -360,7 +368,7 @@ export default function LandingPage() {
       </section>
 
       {/* Old way vs new way */}
-      <section className="max-w-7xl mx-auto px-6 lg:px-8 py-20">
+      <section id="product" className="max-w-7xl mx-auto px-6 lg:px-8 py-20 scroll-mt-20">
         <div className="grid md:grid-cols-2 gap-6">
           <div className="rounded-xl border border-danger-100 bg-danger-50/40 p-8">
             <div className="flex items-center justify-between mb-4">
@@ -405,7 +413,7 @@ export default function LandingPage() {
       </section>
 
       {/* Features */}
-      <section className="max-w-7xl mx-auto px-6 lg:px-8 py-20">
+      <section id="features" className="max-w-7xl mx-auto px-6 lg:px-8 py-20 scroll-mt-20">
         <div className="text-center max-w-2xl mx-auto mb-14">
           <h2 className="font-display text-3xl sm:text-4xl font-bold text-navy-900">
             Powerful features for <span className="text-brand-600">real-world workflows</span>
@@ -417,30 +425,24 @@ export default function LandingPage() {
           {FEATURES.map(({ icon: Icon, title, description }) => (
             <div
               key={title}
-              className="group bg-white rounded-lg border border-surface-200 p-6 hover:shadow-md hover:border-brand-200 transition-all duration-150"
+              className="bg-white rounded-lg border border-surface-200 p-6 hover:shadow-md hover:border-brand-200 transition-all duration-150"
             >
               <div className="w-10 h-10 rounded-lg bg-brand-50 flex items-center justify-center mb-4">
                 <Icon className="w-5 h-5 text-brand-600" />
               </div>
               <h3 className="font-semibold text-navy-900">{title}</h3>
               <p className="text-sm text-navy-500 mt-1.5">{description}</p>
-              <ArrowRight className="w-4 h-4 text-navy-300 mt-3 group-hover:text-brand-600 group-hover:translate-x-0.5 transition-all" />
             </div>
           ))}
         </div>
       </section>
 
       {/* Industries */}
-      <section className="bg-surface-50 py-20">
+      <section id="industries" className="bg-surface-50 py-20 scroll-mt-20">
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
-          <div className="flex flex-wrap items-end justify-between gap-4 mb-10">
-            <div>
-              <h2 className="font-display text-3xl font-bold text-navy-900">Built for every industry</h2>
-              <p className="text-navy-500 mt-2">From startups to enterprises, ProofLoop adapts to your workflow.</p>
-            </div>
-            <Button variant="outline" size="sm">
-              Explore all use cases <ArrowRight className="w-4 h-4" />
-            </Button>
+          <div className="mb-10">
+            <h2 className="font-display text-3xl font-bold text-navy-900">Built for every industry</h2>
+            <p className="text-navy-500 mt-2">From startups to enterprises, ProofLoop adapts to your workflow.</p>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {INDUSTRIES.map(({ icon: Icon, title, description }) => (

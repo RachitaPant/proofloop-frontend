@@ -5,19 +5,33 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import { requestApi } from "@/lib/api";
 import { Request, RequestStatus } from "@/types";
 import Link from "next/link";
-import { ArrowRight, FileText, CheckCircle2 } from "lucide-react";
+import { ArrowRight, FileText, CheckCircle2, Plus, ClipboardCheck, Users, Zap, LucideIcon } from "lucide-react";
 import toast from "react-hot-toast";
 import { Card } from "@/components/ui/Card";
 import StatusBadge from "@/components/ui/StatusBadge";
 import Spinner from "@/components/ui/Spinner";
 import EmptyState from "@/components/ui/EmptyState";
 import Button from "@/components/ui/Button";
+import { useAuth } from "@/lib/auth-context";
 
-function StatTile({ label, value, tone }: { label: string; value: number; tone?: string }) {
+function StatTile({
+  icon: Icon,
+  label,
+  value,
+  tone,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: number;
+  tone: string;
+}) {
   return (
-    <Card className="p-6">
-      <div className="text-sm text-navy-500">{label}</div>
-      <div className={`text-3xl font-display font-bold mt-2 ${tone ?? "text-navy-900"}`}>{value}</div>
+    <Card className="p-5">
+      <div className={`w-9 h-9 rounded-lg flex items-center justify-center mb-3 ${tone}`}>
+        <Icon className="w-4.5 h-4.5" />
+      </div>
+      <div className="text-2xl font-display font-bold text-navy-900">{value}</div>
+      <div className="text-sm text-navy-500 mt-0.5">{label}</div>
     </Card>
   );
 }
@@ -45,6 +59,7 @@ function RequestRow({ request }: { request: Request }) {
 }
 
 export default function Dashboard() {
+  const { user } = useAuth();
   const [myRequests, setMyRequests] = useState<Request[]>([]);
   const [pendingRequests, setPendingRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,23 +94,40 @@ export default function Dashboard() {
   return (
     <ProtectedRoute>
       <div className="space-y-8">
-        <div>
-          <h1 className="text-3xl font-display font-bold text-navy-900">Dashboard</h1>
-          <p className="text-navy-500 mt-1">Overview of your requests and pending approvals</p>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-display font-bold text-navy-900">
+              Welcome back, {user?.name?.split(" ")[0]} 👋
+            </h1>
+            <p className="text-navy-500 mt-1">Here&rsquo;s what&rsquo;s happening with your approvals today.</p>
+          </div>
+          <Link href="/dashboard/workflows">
+            <Button>
+              <Plus className="w-4 h-4" />
+              Create Request
+            </Button>
+          </Link>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-          <StatTile label="My Requests" value={myRequests.length} />
-          <StatTile label="Pending My Approval" value={pendingRequests.length} tone="text-brand-600" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-5">
+          <StatTile icon={FileText} label="My Requests" value={myRequests.length} tone="text-brand-600 bg-brand-50" />
           <StatTile
-            label="Approved"
-            value={myRequests.filter((r) => r.status === RequestStatus.APPROVED).length}
-            tone="text-success-600"
+            icon={ClipboardCheck}
+            label="Pending My Approval"
+            value={pendingRequests.length}
+            tone="text-warning-600 bg-warning-50"
           />
           <StatTile
+            icon={Users}
+            label="Approved"
+            value={myRequests.filter((r) => r.status === RequestStatus.APPROVED).length}
+            tone="text-success-600 bg-success-50"
+          />
+          <StatTile
+            icon={Zap}
             label="Rejected"
             value={myRequests.filter((r) => r.status === RequestStatus.REJECTED).length}
-            tone="text-danger-600"
+            tone="text-danger-600 bg-danger-50"
           />
         </div>
 
