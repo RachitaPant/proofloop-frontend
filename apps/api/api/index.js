@@ -1,9 +1,7 @@
-// Vercel serverless entry point. Unlike src/index.js (Render/Docker/local),
-// this does NOT call app.listen() or start the setInterval SLA scheduler —
-// serverless functions don't stay alive between requests, so a long-lived
-// timer there would do nothing useful. Trigger SLA checks via
-// POST /api/admin/trigger-sla-check on a Vercel Cron Job instead (see
-// vercel.json's `crons` entry).
+// Vercel serverless entry point. `pnpm build` (tsup) compiles src/ to dist/
+// first; this file just hands the Express app to Vercel's Node runtime.
+// Unlike src/server.ts it never calls app.listen() or starts the in-process
+// SLA scheduler. Vercel Cron hits /api/cron/sla-escalation instead (vercel.json).
 require('dotenv').config();
 
-module.exports = require('../src/app');
+module.exports = require('../dist/app.js').default;

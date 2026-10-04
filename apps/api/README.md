@@ -1,9 +1,13 @@
-# ProofLoop Backend (Express)
+# ProofLoop API
 
-The primary ProofLoop API (Node/Express + MongoDB), deployable on Vercel's
-free Hobby plan as a serverless function, or on any Node host. It began as a
-mirror of the Spring Boot backend (`../backend`) and keeps the same routes and
-JSON shapes, but is now **ahead** of it — see "Divergence from Spring Boot".
+Express 5 + TypeScript + MongoDB (Mongoose). Request bodies are validated with
+the Zod schemas in `packages/shared`, which also define the response types the
+web app uses. Deploys to Vercel's free Hobby plan as a serverless function, or
+to any Node host.
+
+It began as a mirror of the Spring Boot backend (archived in its own
+repository) and keeps the same routes and JSON shapes, but is now ahead of it;
+see "Divergence from Spring Boot".
 
 ## Access rules
 
@@ -48,68 +52,39 @@ The Spring Boot service has none of the above: it never populates
 role at registration, and its SLA job mutates the workflow template. Don't
 point the frontend at it for anything beyond local experiments.
 
-## Tests
+## Development
+
+Run from the repo root, or with `--filter @proofloop/api`:
 
 ```bash
-npm test   # integration tests against an in-memory MongoDB (no Atlas needed)
+cp apps/api/.env.example apps/api/.env      # MONGODB_URI, 32+ char JWT_SECRET
+pnpm --filter @proofloop/api dev             # tsx watch, seeds demo data in development
+pnpm --filter @proofloop/api test            # Vitest + supertest against an in-memory MongoDB
+pnpm --filter @proofloop/api build           # tsup → dist/app.js (Vercel) + dist/server.js (Node)
 ```
 
-The first run downloads a MongoDB binary for `mongodb-memory-server`.
+The first test run downloads a MongoDB binary for `mongodb-memory-server`.
 
-## Running locally
+## Entry points
 
-```bash
-cp .env.example .env   # fill in MONGODB_URI, JWT_SECRET
-npm install
-npm run dev             # nodemon
-# or: npm start
-```
+- `src/server.ts` → `dist/server.js`: long-running process (local, Docker,
+  Render). Connects, seeds demo data outside production, starts the hourly
+  in-process SLA scheduler, and listens on `PORT`.
+- `api/index.js`: Vercel serverless function. Re-exports the bundled Express
+  app from `dist/app.js`. No `listen()` and no scheduler; the DB connection
+  is cached across warm invocations.
 
-## Deploying on Render
+## Deploying
 
-- Runtime: Node (not Docker required, but a `Dockerfile` is included if you
-  prefer a container build).
-- Build command: `npm install`
-- Start command: `npm start`
-- Env vars: `MONGODB_URI`, `MONGODB_DATABASE`, `JWT_SECRET`,
-  `JWT_EXPIRATION_MS`, `CORS_ALLOWED_ORIGINS`, `NODE_ENV=production`.
+See [DEPLOYMENT.md](../../DEPLOYMENT.md). On Vercel:
 
-Then point the frontend's `NEXT_PUBLIC_API_URL` at this service's Render URL.
-
-## Deploying on Vercel
-
-The repo also works as a Vercel serverless deployment via `api/index.js` +
-`vercel.json` (it rewrites every path to that one function, so the Express
-app's own routing still applies).
-
-**You must set these in Project Settings → Environment Variables** (for
-Production and Preview) before it'll boot — a missing `MONGODB_URI` is the
-`MongooseError: The 'uri' parameter to 'openUri()' must be a string, got
-"undefined"` / 500 you'll see in the logs if it's absent:
-
-- `MONGODB_URI`, `MONGODB_DATABASE`
-- `JWT_SECRET`, `JWT_EXPIRATION_MS`
-- `CORS_ALLOWED_ORIGINS` — your frontend's deployed origin(s)
-- `NODE_ENV=production` (disables the demo seeder)
-- `CRON_SECRET` — any random string; enables the SLA-escalation cron hook
-- `JWT_SECRET` must be **at least 32 characters** or the API refuses to issue tokens
-- `AUTH_RATE_LIMIT` (optional, default 20): login/register attempts per IP per 15 min. On Vercel this counter is per function instance, so treat it as a speed bump rather than a hard limit.
-
-Serverless-specific differences from the Render/local entry point
-(`src/index.js`):
-
-- No `app.listen()` — Vercel invokes the exported Express app per-request.
-- The DB connection is cached across warm invocations (`src/config/db.js`),
-  not re-established every request.
-- The in-process `setInterval` SLA scheduler does nothing useful here
-  (functions don't stay alive between requests), so it's not started. Instead,
-  `vercel.json` registers a daily Vercel Cron Job against
-  `GET /api/cron/sla-escalation`, gated by the `CRON_SECRET` you set above.
-  Daily, not hourly, because Vercel's Hobby plan caps cron jobs at once per
-  day — the Render/local scheduler stays hourly (`src/services/slaEscalation.service.js`).
-  If you're on a Pro/Enterprise plan and want finer-grained escalation on
-  Vercel, tighten the schedule in `vercel.json` (e.g. `"0 * * * *"` for hourly).
-- The demo-data seeder does **not** run automatically on Vercel (there's no
-  startup phase to hook it into) — run it once locally against the same
-  `MONGODB_URI`, or hit `/api/auth/register` directly, to create your first
-  users.
+- The SLA check runs as a **daily** Vercel Cron Job
+  (`GET /api/cron/sla-escalation`, authorised by `CRON_SECRET`), because the
+  Hobby plan only allows daily crons. On Pro you can tighten the schedule in
+  `vercel.json` (e.g. `"0 * * * *"`).
+- The demo seeder doesn't run on Vercel (no startup phase). Run the API
+  locally once against the same `MONGODB_URI`, or register through the UI.
+- `AUTH_RATE_LIMIT` (default 20 attempts per IP per 15 minutes) is counted
+  per function instance, so treat it as a speed bump rather than a hard limit.
+- `public/` is intentionally empty: Vercel expects a static output directory
+  when a project has a build command.
