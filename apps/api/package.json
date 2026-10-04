@@ -1,0 +1,29 @@
+{
+  "name": "proofloop-backend-express",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Express mirror of the ProofLoop Spring Boot API — same routes, same JSON shapes, drop-in swappable via NEXT_PUBLIC_API_URL.",
+  "type": "commonjs",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "test": "node --test --test-concurrency=1 test/api.test.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^8.7.0",
+    "express-validator": "^7.1.0",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.5.1"
+  },
+  "devDependencies": {
+    "mongodb-memory-server": "^11.3.0",
+    "nodemon": "^3.1.4",
+    "supertest": "^7.3.1"
+  }
+}
