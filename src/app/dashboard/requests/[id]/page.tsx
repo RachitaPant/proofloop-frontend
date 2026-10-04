@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { requestApi, workflowApi } from "@/lib/api";
-import { Request, Workflow, RequestStatus } from "@/types";
-import { CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
+import { Request, Workflow, RequestStatus, Role, ChainVerification } from "@/types";
+import { CheckCircle2, XCircle, AlertTriangle, ShieldCheck, ShieldAlert } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuth } from "@/lib/auth-context";
 import { Card, CardHeader, CardTitle, CardBody } from "@/components/ui/Card";
@@ -25,12 +25,15 @@ export default function RequestDetailPage() {
   const [comment, setComment] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [verification, setVerification] = useState<ChainVerification | null>(null);
+  const [verifying, setVerifying] = useState(false);
 
   useEffect(() => {
     loadRequest();
   }, [params.id]);
 
   const loadRequest = async () => {
+    setVerification(null);
     try {
       const { data } = await requestApi.getById(params.id as string);
       setRequest(data);
@@ -40,6 +43,18 @@ export default function RequestDetailPage() {
       toast.error("Failed to load request");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleVerify = async () => {
+    setVerifying(true);
+    try {
+      const { data } = await requestApi.verify(params.id as string);
+      setVerification(data);
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to verify audit chain");
+    } finally {
+      setVerifying(false);
     }
   };
 
@@ -86,7 +101,11 @@ export default function RequestDetailPage() {
     if (request.currentStep >= workflow.steps.length) {
       return false;
     }
-    const currentStepRole = workflow.steps[request.currentStep].requiredRole;
+    if (request.createdBy === user?.id) {
+      return false;
+    }
+    // An SLA-escalated request's current step is routed to ADMIN.
+    const currentStepRole = request.escalated ? Role.ADMIN : workflow.steps[request.currentStep].requiredRole;
     const stepApprovers = request.stepApprovals[request.currentStep] || [];
     const alreadyApproved = stepApprovers.includes(user?.id || "");
 
@@ -130,7 +149,10 @@ export default function RequestDetailPage() {
                 <WorkflowStepList
                   steps={workflow.steps}
                   isComplete={(i) => i < request.currentStep || request.status === RequestStatus.APPROVED}
-                  isCurrent={(i) => i === request.currentStep && canAct}
+                  isCurrent={(i) =>
+                    i === request.currentStep &&
+                    (request.status === RequestStatus.PENDING || request.status === RequestStatus.IN_REVIEW)
+                  }
                   approvalsFor={(i) => (request.stepApprovals[i] || []).length}
                 />
               </CardBody>
@@ -164,10 +186,39 @@ export default function RequestDetailPage() {
 
             {request.history.length > 0 && (
               <Card>
-                <CardHeader>
+                <CardHeader className="flex items-center justify-between gap-3">
                   <CardTitle>Audit History</CardTitle>
+                  <Button variant="secondary" size="sm" onClick={handleVerify} loading={verifying}>
+                    <ShieldCheck className="w-4 h-4" />
+                    Verify chain
+                  </Button>
                 </CardHeader>
-                <CardBody className="pt-0">
+                <CardBody className="pt-0 space-y-4">
+                  {verification &&
+                    (verification.valid ? (
+                      <div className="flex items-start gap-2 rounded-lg border border-success-200 bg-success-50 px-3 py-2.5 text-sm text-success-700">
+                        <ShieldCheck className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                        <div className="min-w-0">
+                          <div className="font-medium">
+                            Chain intact:{" "}
+                            {verification.length === 1
+                              ? "the entry matches its hash"
+                              : `all ${verification.length} entries match their hashes`}
+                          </div>
+                          <div className="font-mono text-xs break-all opacity-80">head {verification.headHash}</div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-start gap-2 rounded-lg border border-danger-200 bg-danger-50 px-3 py-2.5 text-sm text-danger-700">
+                        <ShieldAlert className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <div className="font-medium">
+                            Verification failed at entry #{(verification.brokenAtIndex ?? 0) + 1}
+                          </div>
+                          <div className="text-xs">{verification.reason}</div>
+                        </div>
+                      </div>
+                    ))}
                   <AuditTrail history={request.history} />
                 </CardBody>
               </Card>

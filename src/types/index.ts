@@ -21,6 +21,7 @@ export interface User {
   name: string;
   email: string;
   role: Role;
+  createdAt?: string;
 }
 
 export interface AuthResponse {
@@ -76,6 +77,14 @@ export interface Request {
   stepStartTimes: { [stepIndex: number]: string }; // NEW: Map of step -> start time
   escalated: boolean; // NEW
   originalRequiredRole?: Role; // NEW
+}
+
+export interface ChainVerification {
+  valid: boolean;
+  length: number;
+  headHash?: string;
+  brokenAtIndex?: number;
+  reason?: string;
 }
 
 export interface Analytics {

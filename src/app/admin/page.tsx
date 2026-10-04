@@ -3,12 +3,14 @@
 import { useEffect, useState } from 'react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { adminApi } from '@/lib/api';
-import { Analytics } from '@/types';
+import { Analytics, Role, User } from '@/types';
+import { useAuth } from '@/lib/auth-context';
 import { BarChart3, Users, Workflow, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Card, CardBody } from '@/components/ui/Card';
 import Spinner from '@/components/ui/Spinner';
 import ProgressBar from '@/components/ui/ProgressBar';
+import { Select } from '@/components/ui/Input';
 
 const STAT_TILES = (a: Analytics) => [
   { icon: Users, iconTone: 'text-brand-600 bg-brand-50', value: a.totalUsers, label: 'Total Users' },
@@ -23,21 +25,38 @@ const STAT_TILES = (a: Analytics) => [
 ];
 
 export default function AdminPage() {
+  const { user: currentUser } = useAuth();
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
+  const [savingUserId, setSavingUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadAnalytics();
+    loadData();
   }, []);
 
-  const loadAnalytics = async () => {
+  const loadData = async () => {
     try {
-      const { data } = await adminApi.getAnalytics();
-      setAnalytics(data);
+      const [analyticsRes, usersRes] = await Promise.all([adminApi.getAnalytics(), adminApi.getUsers()]);
+      setAnalytics(analyticsRes.data);
+      setUsers(usersRes.data);
     } catch (error) {
-      toast.error('Failed to load analytics');
+      toast.error('Failed to load admin data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const changeRole = async (target: User, role: Role) => {
+    setSavingUserId(target.id);
+    try {
+      const { data } = await adminApi.updateUserRole(target.id, role);
+      setUsers((prev) => prev.map((u) => (u.id === data.id ? data : u)));
+      toast.success(`${data.name} is now ${data.role}`);
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to update role');
+    } finally {
+      setSavingUserId(null);
     }
   };
 
@@ -112,13 +131,53 @@ export default function AdminPage() {
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-navy-500">Avg. Workflow Steps</span>
-                  <span className="text-2xl font-display font-bold text-navy-900">2.5</span>
+                  <span className="text-navy-500">Total Workflows</span>
+                  <span className="text-2xl font-display font-bold text-navy-900">{analytics.totalWorkflows}</span>
                 </div>
               </div>
             </CardBody>
           </Card>
         </div>
+
+        <Card>
+          <CardBody>
+            <h3 className="font-display font-semibold text-lg text-navy-900">Users &amp; Roles</h3>
+            <p className="text-sm text-navy-500 mt-1 mb-4">
+              New sign-ups are always Users. Grant Reviewer or Admin access here.
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-navy-500 border-b border-surface-200">
+                    <th className="py-2 pr-4 font-medium">Name</th>
+                    <th className="py-2 pr-4 font-medium">Email</th>
+                    <th className="py-2 font-medium w-44">Role</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((u) => (
+                    <tr key={u.id} className="border-b border-surface-100 last:border-0">
+                      <td className="py-2.5 pr-4 font-medium text-navy-900">{u.name}</td>
+                      <td className="py-2.5 pr-4 text-navy-600">{u.email}</td>
+                      <td className="py-2.5">
+                        <Select
+                          aria-label={`Role for ${u.name}`}
+                          value={u.role}
+                          disabled={u.id === currentUser?.id || savingUserId === u.id}
+                          onChange={(e) => changeRole(u, e.target.value as Role)}
+                        >
+                          <option value={Role.USER}>User</option>
+                          <option value={Role.REVIEWER}>Reviewer</option>
+                          <option value={Role.ADMIN}>Admin</option>
+                        </Select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardBody>
+        </Card>
       </div>
     </ProtectedRoute>
   );

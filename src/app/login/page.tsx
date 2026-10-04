@@ -2,10 +2,9 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
-import { Role } from '@/types';
 import { CheckCircle2, Workflow, Shield, ShieldCheck } from 'lucide-react';
 import Button from '@/components/ui/Button';
-import { Input, Select } from '@/components/ui/Input';
+import { Input } from '@/components/ui/Input';
 
 const FEATURES = [
   {
@@ -32,7 +31,6 @@ export default function Home() {
     name: '',
     email: '',
     password: '',
-    role: Role.USER,
   });
   const [loading, setLoading] = useState(false);
 
@@ -43,7 +41,7 @@ export default function Home() {
       if (isLogin) {
         await login(formData.email, formData.password);
       } else {
-        await register(formData.name, formData.email, formData.password, formData.role);
+        await register(formData.name, formData.email, formData.password);
       }
     } catch (error) {
       console.error(error);
@@ -122,20 +120,17 @@ export default function Home() {
                 label="Password"
                 type="password"
                 required
+                minLength={isLogin ? undefined : 8}
+                hint={isLogin ? undefined : 'At least 8 characters'}
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
               />
 
               {!isLogin && (
-                <Select
-                  label="Role"
-                  value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value as Role })}
-                >
-                  <option value={Role.USER}>User</option>
-                  <option value={Role.REVIEWER}>Reviewer</option>
-                  <option value={Role.ADMIN}>Admin</option>
-                </Select>
+                <p className="text-xs text-navy-500">
+                  New accounts start as <span className="font-medium">User</span>. An admin can grant Reviewer or
+                  Admin access.
+                </p>
               )}
 
               <Button type="submit" size="lg" loading={loading} className="w-full">
