@@ -1,7 +1,9 @@
 import axios from 'axios';
 import { AuthResponse, Workflow, Request, Analytics, User, Role, ChainVerification } from '@/types';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+// Strip trailing slashes: "https://host/" + "/api" would produce "//api", which
+// Vercel answers with a redirect that browsers refuse to follow on CORS preflights.
+const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080').replace(/\/+$/, '');
 
 const api = axios.create({
   baseURL: `${API_URL}/api`,
