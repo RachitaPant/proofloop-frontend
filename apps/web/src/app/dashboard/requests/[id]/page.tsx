@@ -197,7 +197,7 @@ export default function RequestDetailPage() {
                   {verification &&
                     (verification.valid ? (
                       <div className="flex items-start gap-2 rounded-lg border border-success-200 bg-success-50 px-3 py-2.5 text-sm text-success-700">
-                        <ShieldCheck className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                        <ShieldCheck className="w-4 h-4 mt-0.5 shrink-0" />
                         <div className="min-w-0">
                           <div className="font-medium">
                             Chain intact:{" "}
@@ -210,7 +210,7 @@ export default function RequestDetailPage() {
                       </div>
                     ) : (
                       <div className="flex items-start gap-2 rounded-lg border border-danger-200 bg-danger-50 px-3 py-2.5 text-sm text-danger-700">
-                        <ShieldAlert className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                        <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0" />
                         <div>
                           <div className="font-medium">
                             Verification failed at entry #{(verification.brokenAtIndex ?? 0) + 1}

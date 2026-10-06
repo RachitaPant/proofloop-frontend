@@ -101,7 +101,7 @@ const INDUSTRIES = [
 
 function Nav() {
   return (
-    <nav className="bg-white/90 backdrop-blur-sm border-b border-surface-200 sticky top-0 z-40">
+    <nav className="bg-white/90 backdrop-blur-xs border-b border-surface-200 sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-6 lg:px-8 h-[72px] flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2 font-display text-lg font-bold text-navy-900">
           <ShieldCheck className="w-5 h-5 text-brand-600" />
@@ -179,7 +179,7 @@ function DashboardMock() {
   return (
     <div className="rounded-2xl border border-surface-200 bg-white shadow-lg overflow-hidden flex text-sm">
       {/* Sidebar */}
-      <div className="w-40 flex-shrink-0 border-r border-surface-200 bg-surface-50 py-4 px-3 hidden sm:block">
+      <div className="w-40 shrink-0 border-r border-surface-200 bg-surface-50 py-4 px-3 hidden sm:block">
         <div className="flex items-center gap-1.5 px-1 mb-5 font-display font-bold text-navy-900 text-sm">
           <ShieldCheck className="w-4 h-4 text-brand-600" />
           ProofLoop
@@ -220,7 +220,7 @@ function DashboardMock() {
               <div className="font-display font-bold text-navy-900">Welcome back, Rachita 👋</div>
               <div className="text-xs text-navy-400 mt-0.5">Here&rsquo;s what&rsquo;s happening with your approvals today.</div>
             </div>
-            <div className="hidden md:flex items-center gap-1.5 bg-brand-600 text-white text-xs font-medium px-3 py-1.5 rounded-md flex-shrink-0">
+            <div className="hidden md:flex items-center gap-1.5 bg-brand-600 text-white text-xs font-medium px-3 py-1.5 rounded-md shrink-0">
               <Plus className="w-3.5 h-3.5" />
               Create Request
             </div>
@@ -251,7 +251,7 @@ function DashboardMock() {
                       <div className="text-xs font-medium text-navy-900 truncate">{r.title}</div>
                       <div className="text-[10px] text-navy-400">{r.id}</div>
                     </div>
-                    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${toneBadge[r.tone]}`}>
+                    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full shrink-0 ${toneBadge[r.tone]}`}>
                       {r.status}
                     </span>
                   </div>
@@ -268,7 +268,7 @@ function DashboardMock() {
                 {PROGRESS_STEPS.map((s, i) => (
                   <div key={s.name} className="flex items-start gap-2">
                     <div
-                      className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                      className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
                         s.state === 'done'
                           ? 'bg-success-500'
                           : s.state === 'current'
@@ -300,7 +300,7 @@ export default function LandingPage() {
 
       {/* Hero */}
       <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-brand-50/70 via-white to-accent-50/60" />
+        <div className="absolute inset-0 bg-linear-to-br from-brand-50/70 via-white to-accent-50/60" />
         <div className="relative max-w-7xl mx-auto px-6 lg:px-8 pt-16 pb-24 grid lg:grid-cols-2 gap-14 items-center">
           <div>
             <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-surface-200 text-xs font-medium text-navy-600 shadow-xs">
@@ -360,7 +360,7 @@ export default function LandingPage() {
               ))}
             </div>
           </div>
-          <div className="text-right flex-shrink-0">
+          <div className="text-right shrink-0">
             <p className="font-display text-lg font-semibold text-navy-800">&ldquo;Simple, powerful, transparent.&rdquo;</p>
             <p className="text-sm text-navy-400 mt-1">— Teams love ProofLoop</p>
           </div>
@@ -383,7 +383,7 @@ export default function LandingPage() {
             <ul className="space-y-3">
               {OLD_WAY.map((item) => (
                 <li key={item} className="flex items-start gap-2.5 text-navy-600">
-                  <X className="w-4 h-4 text-danger-500 mt-0.5 flex-shrink-0" />
+                  <X className="w-4 h-4 text-danger-500 mt-0.5 shrink-0" />
                   {item}
                 </li>
               ))}
@@ -403,7 +403,7 @@ export default function LandingPage() {
             <ul className="space-y-3">
               {NEW_WAY.map((item) => (
                 <li key={item} className="flex items-start gap-2.5 text-navy-600">
-                  <Check className="w-4 h-4 text-success-600 mt-0.5 flex-shrink-0" />
+                  <Check className="w-4 h-4 text-success-600 mt-0.5 shrink-0" />
                   {item}
                 </li>
               ))}

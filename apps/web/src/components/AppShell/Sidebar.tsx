@@ -20,7 +20,7 @@ export default function Sidebar() {
   const isActive = (href: string) => pathname === href;
 
   return (
-    <aside className="hidden md:flex w-60 flex-shrink-0 flex-col border-r border-surface-200 bg-surface-50 h-screen sticky top-0">
+    <aside className="hidden md:flex w-60 shrink-0 flex-col border-r border-surface-200 bg-surface-50 h-screen sticky top-0">
       <div className="h-16 flex items-center gap-2 px-5 border-b border-surface-200">
         <ShieldCheck className="w-5 h-5 text-brand-600" />
         <span className="font-display font-bold text-navy-900">ProofLoop</span>
@@ -57,7 +57,7 @@ export default function Sidebar() {
 
       <div className="p-3 border-t border-surface-200">
         <div className="flex items-center gap-2.5 px-2 py-2">
-          <div className="w-8 h-8 rounded-full bg-accent-500 text-white flex items-center justify-center text-xs font-semibold flex-shrink-0">
+          <div className="w-8 h-8 rounded-full bg-accent-500 text-white flex items-center justify-center text-xs font-semibold shrink-0">
             {user?.name?.charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0 text-sm">

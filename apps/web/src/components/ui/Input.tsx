@@ -2,7 +2,7 @@ import { InputHTMLAttributes, TextareaHTMLAttributes, SelectHTMLAttributes, forw
 import { cn } from '@/lib/cn';
 
 const fieldBase =
-  'w-full px-3.5 py-2 text-sm bg-white border border-surface-300 rounded-md text-navy-900 placeholder:text-navy-300 transition-colors duration-150 focus:outline-none focus:border-brand-500 focus:shadow-focus disabled:bg-surface-50 disabled:text-navy-300';
+  'w-full px-3.5 py-2 text-sm bg-white border border-surface-300 rounded-md text-navy-900 placeholder:text-navy-300 transition-colors duration-150 focus:outline-hidden focus:border-brand-500 focus:shadow-focus disabled:bg-surface-50 disabled:text-navy-300';
 
 interface FieldWrapperProps {
   label?: string;

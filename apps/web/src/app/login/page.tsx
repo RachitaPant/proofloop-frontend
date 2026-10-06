@@ -51,7 +51,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-surface-50 via-white to-brand-50">
+    <div className="min-h-screen bg-linear-to-br from-surface-50 via-white to-brand-50">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="text-center mb-14">
           <div className="inline-flex items-center gap-2 font-display text-4xl sm:text-5xl font-bold text-navy-900">
@@ -72,7 +72,7 @@ export default function Home() {
             <div className="space-y-5">
               {FEATURES.map(({ icon: Icon, title, description }) => (
                 <div key={title} className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-lg bg-brand-50 flex items-center justify-center flex-shrink-0">
+                  <div className="w-10 h-10 rounded-lg bg-brand-50 flex items-center justify-center shrink-0">
                     <Icon className="w-5 h-5 text-brand-600" />
                   </div>
                   <div>

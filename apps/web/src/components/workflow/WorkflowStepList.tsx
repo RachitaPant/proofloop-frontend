@@ -44,7 +44,7 @@ export default function WorkflowStepList({
             )}
             <div
               className={cn(
-                'w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 z-10 transition-colors',
+                'w-8 h-8 rounded-full flex items-center justify-center shrink-0 z-10 transition-colors',
                 complete ? 'bg-success-500' : current ? 'bg-brand-600' : 'bg-surface-200',
               )}
             >

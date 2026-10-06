@@ -40,7 +40,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         disabled={disabled || loading}
         className={cn(
           'inline-flex items-center justify-center font-medium transition-colors duration-150',
-          'focus-visible:outline-none focus-visible:shadow-focus disabled:cursor-not-allowed',
+          'focus-visible:outline-hidden focus-visible:shadow-focus disabled:cursor-not-allowed',
           variantClasses[variant],
           sizeClasses[size],
           className,

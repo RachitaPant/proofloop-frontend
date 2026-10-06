@@ -49,7 +49,7 @@ function RequestRow({ request }: { request: Request }) {
             {request.workflowName} &middot; Created by {request.createdByName}
           </p>
         </div>
-        <div className="flex items-center gap-3 flex-shrink-0">
+        <div className="flex items-center gap-3 shrink-0">
           <StatusBadge status={request.status} escalated={request.escalated} />
           <ArrowRight className="w-4 h-4 text-navy-300" />
         </div>

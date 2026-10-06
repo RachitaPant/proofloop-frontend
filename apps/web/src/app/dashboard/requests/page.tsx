@@ -79,7 +79,7 @@ export default function RequestsPage() {
                       <span>{new Date(request.createdAt).toLocaleDateString()}</span>
                     </div>
                   </div>
-                  <StatusBadge status={request.status} escalated={request.escalated} className="flex-shrink-0" />
+                  <StatusBadge status={request.status} escalated={request.escalated} className="shrink-0" />
                 </div>
               </Link>
             ))}

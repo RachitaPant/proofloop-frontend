@@ -1,6 +1,172 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+/* `inline` makes font-sans/font-display emit var(--font-inter) directly. Next's
+   next/font sets --font-inter/--font-sora on <body>, so a normal @theme variable
+   (resolved on :root) would see them as undefined and fall back to system fonts. */
+@theme inline {
+  --font-sans: var(--font-inter), sans-serif;
+  --font-display: var(--font-sora), sans-serif;
+}
+
+@theme {
+
+  --color-navy-50: #f4f6fb;
+  --color-navy-100: #e7ebf5;
+  --color-navy-200: #c8d2e6;
+  --color-navy-300: #9aabcc;
+  --color-navy-400: #647aab;
+  --color-navy-500: #445a8c;
+  --color-navy-600: #324670;
+  --color-navy-700: #28375a;
+  --color-navy-800: #1c2740;
+  --color-navy-900: #0f1626;
+  --color-navy-950: #080c16;
+
+  --color-brand-50: #eef4ff;
+  --color-brand-100: #dbe7ff;
+  --color-brand-200: #b8ceff;
+  --color-brand-300: #89adff;
+  --color-brand-400: #5786ff;
+  --color-brand-500: #3763f4;
+  --color-brand-600: #2547d6;
+  --color-brand-700: #1f39ab;
+  --color-brand-800: #1e3287;
+  --color-brand-900: #1c2d6a;
+
+  --color-accent-50: #f2f0ff;
+  --color-accent-100: #e5e0ff;
+  --color-accent-200: #cbc2ff;
+  --color-accent-300: #ab9aff;
+  --color-accent-400: #8b70ff;
+  --color-accent-500: #7048f0;
+  --color-accent-600: #5d33d6;
+  --color-accent-700: #4b28ac;
+  --color-accent-800: #3d2389;
+  --color-accent-900: #301c6b;
+
+  --color-success-50: #eefbf4;
+  --color-success-100: #d6f5e3;
+  --color-success-200: #aeead0;
+  --color-success-300: #7ad9b3;
+  --color-success-400: #45c090;
+  --color-success-500: #22a674;
+  --color-success-600: #16855c;
+  --color-success-700: #136a4c;
+  --color-success-800: #12543e;
+  --color-success-900: #104534;
+
+  --color-warning-50: #fff9ec;
+  --color-warning-100: #ffefc9;
+  --color-warning-200: #ffdd8f;
+  --color-warning-300: #ffc555;
+  --color-warning-400: #ffab2a;
+  --color-warning-500: #f78c0e;
+  --color-warning-600: #d76907;
+  --color-warning-700: #b24a09;
+  --color-warning-800: #91390f;
+  --color-warning-900: #772f10;
+
+  --color-danger-50: #fef2f2;
+  --color-danger-100: #fde2e1;
+  --color-danger-200: #fbcac8;
+  --color-danger-300: #f7a3a0;
+  --color-danger-400: #f0716c;
+  --color-danger-500: #e34842;
+  --color-danger-600: #cc2f29;
+  --color-danger-700: #ab2521;
+  --color-danger-800: #8d2220;
+  --color-danger-900: #75211f;
+
+  --color-surface-0: #ffffff;
+  --color-surface-50: #f8f9fc;
+  --color-surface-100: #f1f3f9;
+  --color-surface-200: #e4e8f1;
+  --color-surface-300: #d1d7e6;
+
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-2xl: 28px;
+
+  --shadow-xs: 0 1px 2px 0 rgba(15, 22, 38, 0.04);
+  --shadow-sm:
+    0 1px 3px 0 rgba(15, 22, 38, 0.06), 0 1px 2px -1px rgba(15, 22, 38, 0.06);
+  --shadow:
+    0 2px 8px -2px rgba(15, 22, 38, 0.08), 0 1px 2px -1px rgba(15, 22, 38, 0.06);
+  --shadow-md:
+    0 6px 16px -4px rgba(15, 22, 38, 0.1), 0 2px 6px -2px rgba(15, 22, 38, 0.06);
+  --shadow-lg:
+    0 16px 32px -8px rgba(15, 22, 38, 0.14),
+    0 4px 10px -4px rgba(15, 22, 38, 0.08);
+  --shadow-focus: 0 0 0 3px rgba(55, 99, 244, 0.25);
+
+  --animate-fade-in: fade-in 0.18s ease-out;
+  --animate-scale-in: scale-in 0.14s ease-out;
+  --animate-shimmer: shimmer 1.4s linear infinite;
+
+  --transition-duration-150: 150ms;
+
+  @keyframes fade-in {
+    0% {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes scale-in {
+    0% {
+      opacity: 0;
+      transform: scale(0.96);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  @keyframes shimmer {
+    0% {
+      background-position: -400px 0;
+    }
+    100% {
+      background-position: 400px 0;
+    }
+  }
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
+
+@utility skeleton {
+  @apply bg-surface-200 rounded-md relative overflow-hidden;
+  background-image: linear-gradient(
+    90deg,
+    var(--color-surface-200) 0px,
+    var(--color-surface-100) 40px,
+    var(--color-surface-200) 80px
+  );
+  background-size: 800px 100%;
+  @apply animate-shimmer;
+}
 
 @layer base {
   :root {
@@ -22,19 +188,5 @@
 
   ::selection {
     @apply bg-brand-200 text-navy-900;
-  }
-}
-
-@layer utilities {
-  .skeleton {
-    @apply bg-surface-200 rounded-md relative overflow-hidden;
-    background-image: linear-gradient(
-      90deg,
-      theme('colors.surface.200') 0px,
-      theme('colors.surface.100') 40px,
-      theme('colors.surface.200') 80px
-    );
-    background-size: 800px 100%;
-    @apply animate-shimmer;
   }
 }

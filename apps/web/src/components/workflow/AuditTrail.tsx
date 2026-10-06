@@ -27,7 +27,7 @@ export default function AuditTrail({ history }: { history: RequestAction[] }) {
               {!isLast && <div className="absolute left-[15px] top-8 w-px h-[calc(100%-20px)] bg-surface-200" />}
               <div
                 className={cn(
-                  'w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 z-10',
+                  'w-8 h-8 rounded-full flex items-center justify-center shrink-0 z-10',
                   approved ? 'bg-success-100' : 'bg-danger-100',
                 )}
               >
