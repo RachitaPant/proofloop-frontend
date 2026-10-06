@@ -27,7 +27,6 @@ import {
   History,
   BarChart3,
   Settings,
-  CheckCircle2,
 } from 'lucide-react';
 import Button from '@/components/ui/Button';
 
@@ -161,13 +160,6 @@ const PROGRESS_STEPS = [
   { name: 'Complete', sub: '', state: 'pending' as const },
 ];
 
-const toneDot: Record<string, string> = {
-  success: 'bg-success-500 text-white',
-  brand: 'bg-brand-500 text-white',
-  warning: 'bg-warning-500 text-white',
-  danger: 'bg-danger-500 text-white',
-};
-
 const toneBadge: Record<string, string> = {
   success: 'bg-success-50 text-success-700',
   brand: 'bg-brand-50 text-brand-700',
@@ -265,7 +257,7 @@ function DashboardMock() {
                 <span className="text-[10px] text-navy-400">3/5</span>
               </div>
               <div className="space-y-2.5">
-                {PROGRESS_STEPS.map((s, i) => (
+                {PROGRESS_STEPS.map((s) => (
                   <div key={s.name} className="flex items-start gap-2">
                     <div
                       className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${

@@ -1,91 +1,81 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import ProtectedRoute from "@/components/ProtectedRoute";
-import { workflowApi, requestApi } from "@/lib/api";
+import { useState } from "react";
+import type { WorkflowStepInput } from "@proofloop/shared";
 import { Workflow, Role } from "@/types";
+import { getErrorMessage } from "@/lib/errors";
+import { useCreateRequest, useCreateWorkflow, useWorkflows } from "@/lib/queries";
 import { Plus, Send, GitBranch } from "lucide-react";
 import toast from "react-hot-toast";
 import { Card, CardHeader, CardBody, CardFooter } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
-import { Input, Textarea, Select, Label } from "@/components/ui/Input";
+import { Input, Textarea, Select } from "@/components/ui/Input";
 import Spinner from "@/components/ui/Spinner";
 import EmptyState from "@/components/ui/EmptyState";
 import WorkflowStepList from "@/components/workflow/WorkflowStepList";
 
 export default function WorkflowsPage() {
-  const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(null);
-  const [loading, setLoading] = useState(true);
   const [numSteps, setNumSteps] = useState(2);
 
-  useEffect(() => {
-    loadWorkflows();
-  }, []);
+  const workflowsQuery = useWorkflows();
+  const workflows = workflowsQuery.data ?? [];
+  const loading = workflowsQuery.isPending;
+  const createWorkflowMutation = useCreateWorkflow();
+  const createRequestMutation = useCreateRequest();
 
-  const loadWorkflows = async () => {
-    try {
-      const { data } = await workflowApi.getAll();
-      setWorkflows(data);
-    } catch (error) {
-      toast.error("Failed to load workflows");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const createWorkflow = async (e: React.FormEvent<HTMLFormElement>) => {
+  const createWorkflow = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    const text = (key: string) => String(formData.get(key) ?? "");
 
-    const steps = [];
-    for (let i = 0; i < numSteps; i++) {
-      steps.push({
-        stepIndex: i,
-        stepName: formData.get(`stepName${i}`) as string,
-        requiredRole: formData.get(`stepRole${i}`) as Role,
-        requiredApprovals: parseInt(formData.get(`requiredApprovals${i}`) as string) || 1,
-        slaHours: formData.get(`slaHours${i}`) ? parseInt(formData.get(`slaHours${i}`) as string) : null,
-      });
-    }
+    const steps: WorkflowStepInput[] = Array.from({ length: numSteps }, (_, i) => ({
+      stepIndex: i,
+      stepName: text(`stepName${i}`),
+      requiredRole: text(`stepRole${i}`) as Role,
+      requiredApprovals: parseInt(text(`requiredApprovals${i}`)) || 1,
+      slaHours: text(`slaHours${i}`) ? parseInt(text(`slaHours${i}`)) : null,
+    }));
 
-    try {
-      await workflowApi.create({
-        name: formData.get("name"),
-        description: formData.get("description"),
-        steps,
-      });
-      toast.success("Workflow created");
-      setShowCreateModal(false);
-      loadWorkflows();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || "Failed to create workflow");
-    }
+    createWorkflowMutation.mutate(
+      { name: text("name"), description: text("description") || null, steps },
+      {
+        onSuccess: () => {
+          toast.success("Workflow created");
+          setShowCreateModal(false);
+        },
+        onError: (error) => toast.error(getErrorMessage(error, "Failed to create workflow")),
+      },
+    );
   };
 
-  const createRequest = async (e: React.FormEvent<HTMLFormElement>) => {
+  const createRequest = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!selectedWorkflow) return;
     const formData = new FormData(e.currentTarget);
 
-    try {
-      await requestApi.create({
-        title: formData.get("title") as string,
-        description: formData.get("description") as string,
-        workflowId: selectedWorkflow!.id,
-      });
-      toast.success("Request created");
-      setShowRequestModal(false);
-      setSelectedWorkflow(null);
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || "Failed to create request");
-    }
+    createRequestMutation.mutate(
+      {
+        title: String(formData.get("title") ?? ""),
+        description: String(formData.get("description") ?? "") || null,
+        workflowId: selectedWorkflow.id,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Request created");
+          setShowRequestModal(false);
+          setSelectedWorkflow(null);
+        },
+        onError: (error) => toast.error(getErrorMessage(error, "Failed to create request")),
+      },
+    );
   };
 
   return (
-    <ProtectedRoute>
+    <>
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <div>
@@ -176,7 +166,7 @@ export default function WorkflowsPage() {
           </div>
 
           <div className="flex gap-3 pt-1">
-            <Button type="submit" className="flex-1">
+            <Button type="submit" className="flex-1" loading={createWorkflowMutation.isPending}>
               Create
             </Button>
             <Button type="button" variant="outline" className="flex-1" onClick={() => setShowCreateModal(false)}>
@@ -197,7 +187,7 @@ export default function WorkflowsPage() {
           <Input name="title" label="Title" required />
           <Textarea name="description" label="Description" rows={4} />
           <div className="flex gap-3 pt-1">
-            <Button type="submit" className="flex-1">
+            <Button type="submit" className="flex-1" loading={createRequestMutation.isPending}>
               Create
             </Button>
             <Button type="button" variant="outline" className="flex-1" onClick={() => setShowRequestModal(false)}>
@@ -206,6 +196,6 @@ export default function WorkflowsPage() {
           </div>
         </form>
       </Modal>
-    </ProtectedRoute>
+    </>
   );
 }

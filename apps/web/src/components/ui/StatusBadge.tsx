@@ -1,4 +1,4 @@
-import { Clock, Eye, CheckCircle2, XCircle, AlertTriangle, FileEdit, Ban, Flag } from 'lucide-react';
+import { Clock, Eye, CheckCircle2, XCircle, AlertTriangle, FileEdit, Ban, Flag, type LucideIcon } from 'lucide-react';
 import Badge from './Badge';
 import { RequestStatus } from '@/types';
 
@@ -15,7 +15,7 @@ const STATUS_CONFIG = {
   ESCALATED: { label: 'Escalated', tone: 'danger' as const, icon: AlertTriangle },
   COMPLETED: { label: 'Completed', tone: 'success' as const, icon: Flag },
   CANCELLED: { label: 'Cancelled', tone: 'neutral' as const, icon: Ban },
-} satisfies Record<string, { label: string; tone: 'neutral' | 'brand' | 'accent' | 'success' | 'warning' | 'danger'; icon: any }>;
+} satisfies Record<string, { label: string; tone: 'neutral' | 'brand' | 'accent' | 'success' | 'warning' | 'danger'; icon: LucideIcon }>;
 
 export type SemanticStatus = keyof typeof STATUS_CONFIG;
 
