@@ -37,3 +37,10 @@ export class ConflictException extends HttpError {
     super(409, 'Conflict', message);
   }
 }
+
+/** A dependency (the database) is down or not configured. */
+export class ServiceUnavailableException extends HttpError {
+  constructor(message = 'Service temporarily unavailable. Try again shortly.') {
+    super(503, 'Service Unavailable', message);
+  }
+}

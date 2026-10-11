@@ -3,7 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
-import { connectDB } from './config/db';
+import { checkReadiness, connectDB } from './config/db';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { isAllowedOrigin } from './middleware/origin';
 import { authRoutes } from './routes/auth.routes';
@@ -33,13 +33,22 @@ app.use(
 app.use(express.json({ limit: '100kb' }));
 app.use(cookieParser());
 
+// Liveness: the function is up. Never touches the database.
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
-// Every other route needs a live DB connection. connectDB() is cached, so
-// this is a no-op after the first (warm) invocation on serverless platforms.
-app.use(async (_req, _res, next) => {
+// Readiness: config present and database reachable. Reports setting names and
+// a coarse database state only, never values or connection details.
+app.get('/health/ready', async (_req, res) => {
+  const report = await checkReadiness();
+  res.status(report.status === 'ok' ? 200 : 503).json(report);
+});
+
+// API routes need a live DB connection. connectDB() is cached, so this is a
+// no-op after the first (warm) invocation on serverless platforms. Anything
+// outside /api (e.g. "/") falls through to a plain 404 without touching the DB.
+app.use('/api', async (_req, _res, next) => {
   await connectDB();
   next();
 });
