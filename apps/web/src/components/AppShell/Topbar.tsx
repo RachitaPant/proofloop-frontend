@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { Search, Bell, ShieldCheck, Home, FileText, GitBranch, BarChart3 } from 'lucide-react';
+import { Search, Bell, ShieldCheck, Home, FileText, GitBranch, BarChart3, UserCheck } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { Role } from '@/types';
 import { cn } from '@/lib/cn';
@@ -12,6 +12,7 @@ const MOBILE_NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: Home },
   { href: '/dashboard/requests', label: 'Requests', icon: FileText },
   { href: '/dashboard/workflows', label: 'Workflows', icon: GitBranch },
+  { href: '/dashboard/delegations', label: 'Delegation', icon: UserCheck },
 ];
 
 export default function Topbar() {

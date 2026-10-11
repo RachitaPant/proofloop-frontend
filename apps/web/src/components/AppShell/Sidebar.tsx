@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ShieldCheck, Home, FileText, GitBranch, BarChart3, LogOut } from 'lucide-react';
+import { ShieldCheck, Home, FileText, GitBranch, BarChart3, LogOut, UserCheck } from 'lucide-react';
 import { Role } from '@/types';
 import { useAuth } from '@/lib/auth-context';
 import { cn } from '@/lib/cn';
@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: Home },
   { href: '/dashboard/requests', label: 'Requests', icon: FileText },
   { href: '/dashboard/workflows', label: 'Workflows', icon: GitBranch },
+  { href: '/dashboard/delegations', label: 'Delegation', icon: UserCheck },
 ];
 
 export default function Sidebar() {

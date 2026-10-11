@@ -68,11 +68,13 @@ export function effectiveRequiredRole(request: RequestDoc, workflow: WorkflowDoc
 }
 
 // One action per person per stage: parallel steps exist to get independent
-// reviews, so the same person can't sign off on two branches of one stage.
-function hasActedInStage(request: RequestDoc, workflow: WorkflowDoc, userId: string) {
+// reviews, so nobody signs off on two branches of one stage, whether they
+// clicked themselves or a delegate clicked for them.
+function involvedInStage(request: RequestDoc, workflow: WorkflowDoc, userId: string) {
   return request.history.some((a) => {
     const step = workflow.steps[a.stepIndex];
-    return a.actedBy === userId && !!step && stageOf(step, a.stepIndex) === request.currentStep;
+    const inStage = !!step && stageOf(step, a.stepIndex) === request.currentStep;
+    return inStage && (a.actedBy === userId || a.onBehalfOf === userId);
   });
 }
 
@@ -95,7 +97,7 @@ function capacityFor(
   stepIndex: number,
 ): ActionableStep | null {
   if (request.createdBy === user.id) return null;
-  if (hasActedInStage(request, workflow, user.id)) return null;
+  if (involvedInStage(request, workflow, user.id)) return null;
 
   const role = effectiveRequiredRole(request, workflow, stepIndex);
   const approvers = approversFor(request, stepIndex);
@@ -103,7 +105,11 @@ function capacityFor(
   if (user.role === role && !approvers.includes(user.id)) return { stepIndex, onBehalfOf: null };
 
   const delegation = delegations.find(
-    (d) => d.role === role && d.fromUserId !== request.createdBy && !approvers.includes(d.fromUserId),
+    (d) =>
+      d.role === role &&
+      d.fromUserId !== request.createdBy &&
+      !approvers.includes(d.fromUserId) &&
+      !involvedInStage(request, workflow, d.fromUserId),
   );
   if (delegation) return { stepIndex, onBehalfOf: { id: delegation.fromUserId, name: delegation.fromUserName } };
 
@@ -230,7 +236,7 @@ export function rejectRequest(user: UserDoc, id: string, comment?: string | null
 function refusalReason(user: UserDoc, request: RequestDoc, workflow: WorkflowDoc, steps: number[]): string {
   if (request.createdBy === user.id) return 'You cannot act on your own request';
   if (steps.length === 0) return 'This step is not awaiting action';
-  if (hasActedInStage(request, workflow, user.id) || steps.some((i) => approversFor(request, i).includes(user.id))) {
+  if (involvedInStage(request, workflow, user.id) || steps.some((i) => approversFor(request, i).includes(user.id))) {
     return 'You have already approved this step';
   }
   return 'User role does not match required role for this step';

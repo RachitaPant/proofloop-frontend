@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { useParams } from "next/navigation";
-import { RequestStatus, Role } from "@/types";
-import { CheckCircle2, XCircle, AlertTriangle, ShieldCheck, ShieldAlert, SearchX } from "lucide-react";
+import { stageOf } from "@proofloop/shared";
+import { RequestStatus } from "@/types";
+import { CheckCircle2, XCircle, AlertTriangle, ShieldCheck, ShieldAlert, SearchX, UserCheck } from "lucide-react";
 import toast from "react-hot-toast";
-import { useAuth } from "@/lib/auth-context";
 import { getErrorMessage } from "@/lib/errors";
 import { useRequest, useRequestAction, useVerifyChain, useWorkflow, type RequestAction } from "@/lib/queries";
 import { Card, CardHeader, CardTitle, CardBody } from "@/components/ui/Card";
@@ -15,13 +15,14 @@ import Button from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Input";
 import Spinner from "@/components/ui/Spinner";
 import EmptyState from "@/components/ui/EmptyState";
-import WorkflowStepList from "@/components/workflow/WorkflowStepList";
+import WorkflowStepList, { type StepState } from "@/components/workflow/WorkflowStepList";
 import AuditTrail from "@/components/workflow/AuditTrail";
+import { cn } from "@/lib/cn";
 
 export default function RequestDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { user } = useAuth();
   const [comment, setComment] = useState("");
+  const [chosenStep, setChosenStep] = useState<number | null>(null);
 
   const requestQuery = useRequest(id);
   const request = requestQuery.data;
@@ -31,26 +32,6 @@ export default function RequestDetailPage() {
   const action = useRequestAction(id);
   const verify = useVerifyChain(id);
   const verification = verify.data;
-
-  const handleAction = (kind: RequestAction) => {
-    action.mutate(
-      { action: kind, comment },
-      {
-        onSuccess: () => {
-          toast.success(kind === "approve" ? "Request approved" : "Request rejected");
-          setComment("");
-          // The chain just grew; an earlier verification result no longer describes it.
-          verify.reset();
-        },
-        onError: (error) => toast.error(getErrorMessage(error, `Failed to ${kind}`)),
-      },
-    );
-  };
-
-  const handleVerify = () =>
-    verify.mutate(undefined, {
-      onError: (error) => toast.error(getErrorMessage(error, "Failed to verify audit chain")),
-    });
 
   if (requestQuery.isError || workflowQuery.isError) {
     return (
@@ -66,25 +47,51 @@ export default function RequestDetailPage() {
     return <Spinner full />;
   }
 
-  const canTakeAction = () => {
-    if (request.status === RequestStatus.APPROVED || request.status === RequestStatus.REJECTED) {
-      return false;
-    }
-    if (request.currentStep >= workflow.steps.length) {
-      return false;
-    }
-    if (request.createdBy === user?.id) {
-      return false;
-    }
-    // An SLA-escalated request's current step is routed to ADMIN.
-    const currentStepRole = request.escalated ? Role.ADMIN : workflow.steps[request.currentStep].requiredRole;
-    const stepApprovers = request.stepApprovals[request.currentStep] || [];
-    const alreadyApproved = stepApprovers.includes(user?.id || "");
+  // What the viewer may act on comes from the API (it knows roles, delegations
+  // and who already acted), so the page doesn't re-derive eligibility.
+  const actionable = request.actionableSteps ?? [];
+  const selected = actionable.find((a) => a.stepIndex === chosenStep) ?? actionable[0];
 
-    return user?.role === currentStepRole && !alreadyApproved;
+  const stageOfStep = (i: number) => stageOf(workflow.steps[i]!, i);
+  const approvals = (i: number) => (request.stepApprovals[i] ?? []).length;
+  const stateFor = (i: number): StepState => {
+    if (request.skippedSteps.includes(i)) return "skipped";
+    if (request.status === RequestStatus.APPROVED) return "complete";
+    const stage = stageOfStep(i);
+    if (stage < request.currentStep) return "complete";
+    if (stage > request.currentStep) return "pending";
+    if (approvals(i) >= workflow.steps[i]!.requiredApprovals) return "complete";
+    return request.status === RequestStatus.REJECTED ? "pending" : "current";
+  };
+  const isEscalated = (i: number) =>
+    request.escalatedSteps.includes(i) ||
+    (request.escalated && request.escalatedSteps.length === 0 && stageOfStep(i) === request.currentStep);
+
+  const handleAction = (kind: RequestAction) => {
+    if (!selected) return;
+    action.mutate(
+      { action: kind, comment, stepIndex: selected.stepIndex },
+      {
+        onSuccess: () => {
+          toast.success(kind === "approve" ? "Request approved" : "Request rejected");
+          setComment("");
+          setChosenStep(null);
+          // The chain just grew; an earlier verification result no longer describes it.
+          verify.reset();
+        },
+        onError: (error) => toast.error(getErrorMessage(error, `Failed to ${kind}`)),
+      },
+    );
   };
 
-  const canAct = canTakeAction();
+  const handleVerify = () =>
+    verify.mutate(undefined, {
+      onError: (error) => toast.error(getErrorMessage(error, "Failed to verify audit chain")),
+    });
+
+  const fieldEntries = workflow.fields
+    .filter((f) => request.fields?.[f.key] !== undefined)
+    .map((f) => ({ label: f.label, value: request.fields[f.key] }));
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -119,22 +126,49 @@ export default function RequestDetailPage() {
             <CardBody className="pt-0">
               <WorkflowStepList
                 steps={workflow.steps}
-                isComplete={(i) => i < request.currentStep || request.status === RequestStatus.APPROVED}
-                isCurrent={(i) =>
-                  i === request.currentStep &&
-                  (request.status === RequestStatus.PENDING || request.status === RequestStatus.IN_REVIEW)
-                }
-                approvalsFor={(i) => (request.stepApprovals[i] || []).length}
+                fields={workflow.fields}
+                stateFor={stateFor}
+                approvalsFor={approvals}
+                isEscalated={isEscalated}
               />
             </CardBody>
           </Card>
 
-          {canAct && (
+          {selected && (
             <Card>
               <CardHeader>
                 <CardTitle>Take Action</CardTitle>
               </CardHeader>
               <CardBody className="pt-0 space-y-4">
+                {actionable.length > 1 && (
+                  <fieldset className="space-y-2">
+                    <legend className="text-sm text-navy-600 mb-1">Several steps are waiting for you. Which one?</legend>
+                    {actionable.map((a) => (
+                      <label
+                        key={a.stepIndex}
+                        className={cn(
+                          "flex items-center gap-2 rounded-md border px-3 py-2 text-sm cursor-pointer",
+                          a.stepIndex === selected.stepIndex ? "border-brand-300 bg-brand-50" : "border-surface-200",
+                        )}
+                      >
+                        <input
+                          type="radio"
+                          name="step"
+                          checked={a.stepIndex === selected.stepIndex}
+                          onChange={() => setChosenStep(a.stepIndex)}
+                        />
+                        {workflow.steps[a.stepIndex]?.stepName}
+                      </label>
+                    ))}
+                  </fieldset>
+                )}
+                {selected.onBehalfOf && (
+                  <div className="flex items-center gap-2 rounded-md bg-accent-50 px-3 py-2 text-sm text-accent-700">
+                    <UserCheck className="w-4 h-4 shrink-0" />
+                    You&rsquo;re acting on behalf of {selected.onBehalfOf.name} (delegated). This is recorded in the audit
+                    trail.
+                  </div>
+                )}
                 <Textarea
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
@@ -202,7 +236,7 @@ export default function RequestDetailPage() {
                       </div>
                     </div>
                   ))}
-                <AuditTrail history={request.history} />
+                <AuditTrail history={request.history} steps={workflow.steps} />
               </CardBody>
             </Card>
           )}
@@ -220,6 +254,14 @@ export default function RequestDetailPage() {
                   <StatusBadge status={request.status} escalated={request.escalated} />
                 </div>
               </div>
+              {fieldEntries.map(({ label, value }) => (
+                <div key={label}>
+                  <span className="text-navy-500">{label}</span>
+                  <div className="mt-1 font-medium text-navy-900">
+                    {typeof value === "number" ? value.toLocaleString() : value}
+                  </div>
+                </div>
+              ))}
               <div>
                 <span className="text-navy-500">Created by</span>
                 <div className="mt-1 font-medium text-navy-900">{request.createdByName}</div>

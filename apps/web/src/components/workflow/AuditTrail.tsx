@@ -1,12 +1,12 @@
 import { CheckCircle2, XCircle, ShieldCheck } from 'lucide-react';
-import { RequestAction } from '@/types';
+import { RequestAction, WorkflowStep } from '@/types';
 import { cn } from '@/lib/cn';
 
 /**
  * Tamper-evident audit trail: each entry shows actor, action, timestamp,
  * comment, and the hash-chain link that proves integrity with the prior entry.
  */
-export default function AuditTrail({ history }: { history: RequestAction[] }) {
+export default function AuditTrail({ history, steps = [] }: { history: RequestAction[]; steps?: WorkflowStep[] }) {
   if (history.length === 0) return null;
 
   return (
@@ -42,8 +42,11 @@ export default function AuditTrail({ history }: { history: RequestAction[] }) {
                 <div className="flex flex-wrap items-baseline gap-x-2">
                   <span className="font-medium text-navy-900">{action.actedByName}</span>
                   <span className={cn('text-sm', approved ? 'text-success-700' : 'text-danger-700')}>
-                    {approved ? 'approved' : 'rejected'} step {action.stepIndex + 1}
+                    {approved ? 'approved' : 'rejected'} {steps[action.stepIndex]?.stepName ?? `step ${action.stepIndex + 1}`}
                   </span>
+                  {action.onBehalfOfName && (
+                    <span className="text-xs text-accent-700">on behalf of {action.onBehalfOfName}</span>
+                  )}
                   <span className="text-xs text-navy-400">
                     {new Date(action.timestamp).toLocaleString()}
                   </span>

@@ -33,14 +33,38 @@ see "Divergence from Spring Boot".
 
 ## Approval engine
 
-- `requiredApprovals` (quorum) is enforced per step: each eligible approver
-  votes once (`stepApprovals`), and the step advances when the quorum is met.
-  A single rejection rejects the request.
-- `stepStartTimes` records when each step began; SLA deadlines are measured
-  from it.
-- SLA escalation sets `escalated`/`originalRequiredRole` on **the request** and
-  routes its current step to ADMIN. The shared workflow template is never
-  modified. Escalation clears when the request advances to the next step.
+The routing rules are pure functions in `packages/shared/src/engine.ts`
+(also used by the web app for previews); `request.service.ts` applies them.
+
+- **Stages:** each step has a `stage` (renumbered 0..n-1 on save). Steps in a
+  stage run in parallel; `request.currentStep` is the current stage. Workflows
+  saved before stages existed run one step per stage.
+- **Conditions:** `step.condition` = `{ mode: all|any, rules: [{ field,
+  operator, value }] }` over the workflow's `fields`. Operators: eq, neq, gt,
+  gte, lt, lte, in, contains. A rule on a missing value is false. Field values
+  are validated against the workflow on create; `skippedSteps` is computed
+  then and stored. Creating a request that matches no step is refused.
+- **Approval counts:** `requiredApprovals` is enforced per step;
+  `stepApprovals` holds the **principals** (the delegator when a delegate
+  acted). A stage completes when none of its applicable steps is still short of
+  approvals. A single rejection, in any branch, rejects the request.
+- **One action per person per stage**, counting actions taken for you by a
+  delegate, so parallel reviews stay independent.
+- **Which step:** approve/reject take an optional `stepIndex`, required only
+  when the viewer can act on several parallel steps. `GET /requests/:id` and
+  `/requests/pending` include `actionableSteps` for the viewer.
+- **Delegation** (`/api/delegations`): time-boxed (max 90 days), one active per
+  delegator, revocable by the delegator or an admin. It grants the delegator's
+  role on approval steps only, and only while the delegator still holds it.
+  Nobody approves their own request through a delegate, and no delegate acts
+  for the request's creator. Audit entries record `onBehalfOf`, and it's part
+  of the hash input (appended only when present, so older entries still verify).
+- `stepStartTimes` records when each step became active; SLA deadlines are
+  measured from it.
+- SLA escalation adds breached steps to `escalatedSteps` on **the request**
+  (and sets `escalated`/`originalRequiredRole`), routing those steps to ADMIN.
+  The shared workflow template is never modified. Escalation clears when the
+  request moves to the next stage.
 - Concurrent approvals are guarded by optimistic concurrency
   (`optimisticConcurrency` on the Request schema): the losing write gets **409**.
 - Every action is appended to a SHA-256 hash chain
@@ -54,6 +78,8 @@ see "Divergence from Spring Boot".
 - `GET /api/requests/:id/verify`: audit-chain verification
 - `GET /api/admin/users`: list users (password hashes are never serialized)
 - `PATCH /api/admin/users/:id/role`: change a user's role (not your own)
+- `GET|POST /api/delegations`, `DELETE /api/delegations/:id`: approval delegation
+- `GET /api/auth/me`, `POST /api/auth/refresh`, `POST /api/auth/logout`: cookie sessions
 
 ## Divergence from Spring Boot
 

@@ -52,6 +52,29 @@ export async function seedData() {
     steps: [{ stepIndex: 0, stepName: 'Manager Review', requiredRole: 'REVIEWER' }],
   });
 
+  // Shows off conditional routing and a parallel stage.
+  await Workflow.create({
+    name: 'Purchase Approval',
+    description: 'Manager sign-off, then legal and security in parallel; the CFO only for large amounts.',
+    createdBy: admin.id,
+    fields: [
+      { key: 'amount', label: 'Amount', type: 'number', required: true },
+      { key: 'department', label: 'Department', type: 'select', required: true, options: ['Engineering', 'Finance', 'Sales'] },
+    ],
+    steps: [
+      { stepIndex: 0, stepName: 'Manager review', requiredRole: 'REVIEWER', stage: 0, slaHours: 24 },
+      { stepIndex: 1, stepName: 'Legal review', requiredRole: 'REVIEWER', stage: 1 },
+      { stepIndex: 2, stepName: 'Security review', requiredRole: 'REVIEWER', stage: 1 },
+      {
+        stepIndex: 3,
+        stepName: 'CFO approval',
+        requiredRole: 'ADMIN',
+        stage: 2,
+        condition: { mode: 'all', rules: [{ field: 'amount', operator: 'gt', value: 100000 }] },
+      },
+    ],
+  });
+
   const now = new Date();
   await Request.create({
     title: 'New Feature Proposal',

@@ -1,5 +1,11 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
-import type { CreateRequestInput, CreateWorkflowInput } from '@proofloop/shared';
+import type {
+  CreateDelegationInput,
+  CreateRequestPayload,
+  CreateWorkflowPayload,
+  Delegation,
+  MyDelegations,
+} from '@proofloop/shared';
 import { AuthResponse, Workflow, Request, Analytics, User, Role, ChainVerification } from '@/types';
 
 // Same-origin: next.config.js proxies /api/* to the API, and the session lives
@@ -74,7 +80,7 @@ export const authApi = {
 export const workflowApi = {
   getAll: () => api.get<Workflow[]>('/workflows'),
   getById: (id: string) => api.get<Workflow>(`/workflows/${id}`),
-  create: (data: CreateWorkflowInput) => api.post<Workflow>('/workflows', data),
+  create: (data: CreateWorkflowPayload) => api.post<Workflow>('/workflows', data),
   delete: (id: string) => api.delete(`/workflows/${id}`),
 };
 
@@ -83,12 +89,19 @@ export const requestApi = {
   getMyRequests: () => api.get<Request[]>('/requests/mine'),
   getPendingRequests: () => api.get<Request[]>('/requests/pending'),
   getById: (id: string) => api.get<Request>(`/requests/${id}`),
-  create: (data: CreateRequestInput) => api.post<Request>('/requests', data),
-  approve: (id: string, comment?: string) =>
-    api.post<Request>(`/requests/${id}/approve`, { comment }),
-  reject: (id: string, comment?: string) =>
-    api.post<Request>(`/requests/${id}/reject`, { comment }),
+  create: (data: CreateRequestPayload) => api.post<Request>('/requests', data),
+  approve: (id: string, body: { comment?: string; stepIndex?: number }) =>
+    api.post<Request>(`/requests/${id}/approve`, body),
+  reject: (id: string, body: { comment?: string; stepIndex?: number }) =>
+    api.post<Request>(`/requests/${id}/reject`, body),
   verify: (id: string) => api.get<ChainVerification>(`/requests/${id}/verify`),
+};
+
+// Delegations
+export const delegationApi = {
+  mine: () => api.get<MyDelegations>('/delegations'),
+  create: (data: CreateDelegationInput) => api.post<Delegation>('/delegations', data),
+  revoke: (id: string) => api.delete<Delegation>(`/delegations/${id}`),
 };
 
 // Admin

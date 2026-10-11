@@ -270,6 +270,27 @@ describe('delegation', () => {
     assert.ok(mine.body.received.some((x: { id: string }) => x.id === d.body.id));
   });
 
+  test('a delegate can’t take the second parallel branch for someone who took the first', async () => {
+    const wf = await h.createWorkflow('admin', {
+      steps: [step('Legal', 'REVIEWER', { stage: 0 }), step('Security', 'REVIEWER', { stage: 0 })],
+    });
+    const req = await h.createRequest('bob', wf.id);
+    const d = await h.api.post('/api/delegations').set(h.auth('rev1')).send({ toEmail: 'alice@test.dev', endsAt: inAWeek() }).expect(201);
+
+    await approve('rev1', req.id, { stepIndex: 0 }).expect(200);
+    // alice has nothing she may act on, so the request isn't even visible to her.
+    assert.ok(!(await pendingIds('alice')).includes(req.id));
+    await h.api.get(`/api/requests/${req.id}`).set(h.auth('alice')).expect(404);
+    await approve('alice', req.id, { stepIndex: 1 }).expect(400);
+
+    // And the reverse: after the delegate acts, the delegator can't take the other branch.
+    const req2 = await h.createRequest('bob', wf.id);
+    await approve('alice', req2.id, { stepIndex: 0 }).expect(200);
+    await approve('rev1', req2.id, { stepIndex: 1 }).expect(400);
+
+    await h.api.delete(`/api/delegations/${d.body.id}`).set(h.auth('rev1')).expect(200);
+  });
+
   test('delegation never grants admin API access', async () => {
     const d = await h.api.post('/api/delegations').set(h.auth('admin')).send({ toEmail: 'bob@test.dev', endsAt: inAWeek() }).expect(201);
     await h.api.get('/api/admin/users').set(h.auth('bob')).expect(403);

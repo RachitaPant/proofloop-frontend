@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { CreateRequestInput, CreateWorkflowInput } from '@proofloop/shared';
-import type { Request, Role, User } from '@/types';
-import { adminApi, requestApi, workflowApi } from '@/lib/api';
+import type { CreateDelegationInput, CreateRequestPayload, CreateWorkflowPayload } from '@proofloop/shared';
+import type { Role, User } from '@/types';
+import { adminApi, delegationApi, requestApi, workflowApi } from '@/lib/api';
 
 // Every server-state read and write in the app goes through these hooks, so
 // cache keys and invalidation rules live in one place.
@@ -17,6 +17,9 @@ export const queryKeys = {
     all: ['workflows'] as const,
     list: () => ['workflows', 'list'] as const,
     detail: (id: string) => ['workflows', 'detail', id] as const,
+  },
+  delegations: {
+    mine: () => ['delegations', 'mine'] as const,
   },
   admin: {
     all: ['admin'] as const,
@@ -93,7 +96,7 @@ export function useUsers() {
 export function useCreateWorkflow() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: CreateWorkflowInput) => (await workflowApi.create(input)).data,
+    mutationFn: async (input: CreateWorkflowPayload) => (await workflowApi.create(input)).data,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.workflows.all }),
   });
 }
@@ -101,7 +104,7 @@ export function useCreateWorkflow() {
 export function useCreateRequest() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: CreateRequestInput) => (await requestApi.create(input)).data,
+    mutationFn: async (input: CreateRequestPayload) => (await requestApi.create(input)).data,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.requests.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.admin.all });
@@ -114,12 +117,12 @@ export type RequestAction = 'approve' | 'reject';
 export function useRequestAction(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ action, comment }: { action: RequestAction; comment?: string }) =>
-      (await (action === 'approve' ? requestApi.approve(id, comment) : requestApi.reject(id, comment))).data,
-    onSuccess: (updated: Request) => {
-      // The response is the updated request: show it immediately, then refresh
-      // the lists and stats it affects.
-      queryClient.setQueryData(queryKeys.requests.detail(id), updated);
+    mutationFn: async ({ action, comment, stepIndex }: { action: RequestAction; comment?: string; stepIndex?: number }) =>
+      (await (action === 'approve' ? requestApi.approve : requestApi.reject)(id, { comment, stepIndex })).data,
+    onSuccess: () => {
+      // Refetch the request rather than using the response: what the viewer
+      // can act on next (actionableSteps) is computed per viewer on reads.
+      queryClient.invalidateQueries({ queryKey: queryKeys.requests.detail(id) });
       queryClient.invalidateQueries({ queryKey: ['requests', 'mine'] });
       queryClient.invalidateQueries({ queryKey: ['requests', 'pending'] });
       queryClient.invalidateQueries({ queryKey: queryKeys.admin.all });
@@ -144,5 +147,29 @@ export function useUpdateUserRole() {
         users?.map((u) => (u.id === updated.id ? updated : u)),
       );
     },
+  });
+}
+
+export function useMyDelegations() {
+  return useQuery({
+    queryKey: queryKeys.delegations.mine(),
+    queryFn: async () => (await delegationApi.mine()).data,
+    meta: { errorMessage: 'Failed to load delegations' },
+  });
+}
+
+export function useCreateDelegation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CreateDelegationInput) => (await delegationApi.create(input)).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.delegations.mine() }),
+  });
+}
+
+export function useRevokeDelegation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await delegationApi.revoke(id)).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.delegations.mine() }),
   });
 }

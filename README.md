@@ -63,11 +63,23 @@ to `main` and on every pull request.
 
 ## How approvals work
 
-- Each workflow is an ordered list of steps; each step names the role that may
-  act on it, how many distinct approvals it needs, and an optional SLA.
+- A workflow defines **request fields** (number, text, choice) and **steps**.
+  Each step names the role that may act on it, how many distinct approvals it
+  needs, and an optional SLA.
+- **Stages:** steps run in stages; steps in the same stage run **in parallel**
+  and all must approve before the next stage starts. Nobody signs off on two
+  branches of the same stage.
+- **Conditional routing:** a step can apply only when the request's fields
+  match (e.g. *CFO approval only when Amount > 100000*). Conditions are data
+  evaluated with a fixed set of operators (never `eval`). The routing is
+  decided when the request is created and stored with it. The request form
+  previews the route live, using the same engine (`packages/shared`).
+- **Delegation:** anyone can let a named colleague approve in their place for
+  up to 90 days. It covers approval steps only (never admin access) and ends if
+  the delegator loses the role. The audit trail records "on behalf of".
 - Sign-ups are always `USER`. Admins grant `REVIEWER`/`ADMIN` from the admin page.
-- Requests are visible only to their creator, admins, past actors and current
-  eligible approvers. Nobody can approve their own request.
+- Requests are visible only to their creator, admins, people involved and current
+  eligible approvers. Nobody can approve their own request, directly or through a delegate.
 - A step whose SLA passes is escalated to ADMIN on that request only.
 - Every approve/reject is appended to a SHA-256 hash chain;
   `GET /api/requests/:id/verify` (and the **Verify chain** button) recomputes it.
