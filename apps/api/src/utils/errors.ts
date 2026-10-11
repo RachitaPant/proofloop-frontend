@@ -44,3 +44,10 @@ export class ValidationException extends HttpError {
     super(400, 'Bad Request', Object.values(errors)[0] ?? 'Invalid input');
   }
 }
+
+/** A dependency (the database) is down or not configured. */
+export class ServiceUnavailableException extends HttpError {
+  constructor(message = 'Service temporarily unavailable. Try again shortly.') {
+    super(503, 'Service Unavailable', message);
+  }
+}
