@@ -15,6 +15,7 @@ import { Request, type RequestDoc } from '../models/Request';
 import { Workflow, type WorkflowDoc } from '../models/Workflow';
 import type { UserDoc } from '../models/User';
 import type { DelegationDoc } from '../models/Delegation';
+import { ApproverGroup, type ApproverGroupDoc } from '../models/ApproverGroup';
 import { BadRequestException, ResourceNotFoundException, ValidationException } from '../utils/errors';
 import { GENESIS_HASH, computeHash } from '../utils/hash';
 import { activeDelegationsTo } from './delegation.service';
@@ -63,8 +64,37 @@ function isEscalated(request: RequestDoc, workflow: WorkflowDoc, stepIndex: numb
   );
 }
 
-export function effectiveRequiredRole(request: RequestDoc, workflow: WorkflowDoc, stepIndex: number): Role {
-  return isEscalated(request, workflow, stepIndex) ? 'ADMIN' : workflow.steps[stepIndex]!.requiredRole;
+/** Who a step is assigned to right now: a role, a group, or ADMIN once escalated. */
+export type Assignee = { kind: 'role'; role: Role } | { kind: 'group'; groupId: string };
+
+export function assigneeOf(request: RequestDoc, workflow: WorkflowDoc, stepIndex: number): Assignee {
+  const step = workflow.steps[stepIndex]!;
+  if (isEscalated(request, workflow, stepIndex)) return { kind: 'role', role: 'ADMIN' };
+  if (step.approverGroupId) return { kind: 'group', groupId: step.approverGroupId };
+  return { kind: 'role', role: step.requiredRole ?? 'ADMIN' };
+}
+
+/** What eligibility checks need besides the request: delegations to the viewer and the groups in play. */
+export interface ActorContext {
+  delegations: DelegationDoc[];
+  groups: Map<string, ApproverGroupDoc>;
+}
+
+export async function loadActorContext(user: UserDoc, workflows: (WorkflowDoc | null | undefined)[]): Promise<ActorContext> {
+  const groupIds = [
+    ...new Set(workflows.flatMap((w) => (w?.steps ?? []).flatMap((s) => (s.approverGroupId ? [s.approverGroupId] : [])))),
+  ];
+  const [delegations, groups] = await Promise.all([
+    activeDelegationsTo(user),
+    groupIds.length ? ApproverGroup.find({ _id: { $in: groupIds } }) : Promise.resolve([]),
+  ]);
+  return { delegations, groups: new Map(groups.map((g) => [g.id as string, g])) };
+}
+
+/** Would this principal (a user, or the delegator a delegate stands in for) fill the step's assignment? */
+function fills(principal: { id: string; role: Role }, assignee: Assignee, groups: ActorContext['groups']) {
+  if (assignee.kind === 'role') return principal.role === assignee.role;
+  return groups.get(assignee.groupId)?.memberIds.includes(principal.id) ?? false;
 }
 
 // One action per person per stage: parallel steps exist to get independent
@@ -91,7 +121,7 @@ function involvedInStage(request: RequestDoc, workflow: WorkflowDoc, userId: str
  */
 function capacityFor(
   user: UserDoc,
-  delegations: DelegationDoc[],
+  ctx: ActorContext,
   request: RequestDoc,
   workflow: WorkflowDoc,
   stepIndex: number,
@@ -99,14 +129,16 @@ function capacityFor(
   if (request.createdBy === user.id) return null;
   if (involvedInStage(request, workflow, user.id)) return null;
 
-  const role = effectiveRequiredRole(request, workflow, stepIndex);
+  const assignee = assigneeOf(request, workflow, stepIndex);
   const approvers = approversFor(request, stepIndex);
 
-  if (user.role === role && !approvers.includes(user.id)) return { stepIndex, onBehalfOf: null };
+  if (fills({ id: user.id, role: user.role }, assignee, ctx.groups) && !approvers.includes(user.id)) {
+    return { stepIndex, onBehalfOf: null };
+  }
 
-  const delegation = delegations.find(
+  const delegation = ctx.delegations.find(
     (d) =>
-      d.role === role &&
+      fills({ id: d.fromUserId, role: d.role }, assignee, ctx.groups) &&
       d.fromUserId !== request.createdBy &&
       !approvers.includes(d.fromUserId) &&
       !involvedInStage(request, workflow, d.fromUserId),
@@ -116,10 +148,10 @@ function capacityFor(
   return null;
 }
 
-function actionableSteps(user: UserDoc, delegations: DelegationDoc[], request: RequestDoc, workflow: WorkflowDoc | null | undefined) {
+function actionableSteps(user: UserDoc, ctx: ActorContext, request: RequestDoc, workflow: WorkflowDoc | null | undefined) {
   if (!workflow) return [];
   return pendingSteps(request, workflow).flatMap((i) => {
-    const capacity = capacityFor(user, delegations, request, workflow, i);
+    const capacity = capacityFor(user, ctx, request, workflow, i);
     return capacity ? [capacity] : [];
   });
 }
@@ -143,7 +175,7 @@ async function loadVisibleRequest(user: UserDoc, id: string) {
   const request = await Request.findById(id).catch(() => null);
   if (!request) throw new ResourceNotFoundException('Request not found');
   const workflow = await findWorkflow(request.workflowId);
-  const actionable = actionableSteps(user, await activeDelegationsTo(user), request, workflow);
+  const actionable = actionableSteps(user, await loadActorContext(user, [workflow]), request, workflow);
   if (!canView(user, request, actionable)) throw new ResourceNotFoundException('Request not found');
   return { request, workflow, actionable };
 }
@@ -203,18 +235,16 @@ export async function getMyRequests(user: UserDoc) {
 }
 
 export async function getPendingRequests(user: UserDoc) {
-  const [active, delegations] = await Promise.all([
-    Request.find({ status: { $in: ACTIVE_STATUSES } }).sort({ createdAt: 1 }),
-    activeDelegationsTo(user),
-  ]);
+  const active = await Request.find({ status: { $in: ACTIVE_STATUSES } }).sort({ createdAt: 1 });
 
-  // One workflow query for the whole batch instead of one per request.
+  // One workflow query (and one delegation + group query) for the whole batch.
   const workflowIds = [...new Set(active.map((r) => r.workflowId))];
   const workflows = await Workflow.find({ _id: { $in: workflowIds } }).catch(() => []);
   const byId = new Map(workflows.map((w) => [w.id as string, w]));
+  const ctx = await loadActorContext(user, workflows);
 
   return active.flatMap((r) => {
-    const actionable = actionableSteps(user, delegations, r, byId.get(r.workflowId));
+    const actionable = actionableSteps(user, ctx, r, byId.get(r.workflowId));
     return actionable.length > 0 ? [{ ...r.toJSON(), actionableSteps: actionable }] : [];
   });
 }
@@ -257,7 +287,7 @@ async function processRequest(
   if (!workflow) throw new ResourceNotFoundException('Workflow not found');
 
   const pending = pendingSteps(request, workflow);
-  const candidates = actionableSteps(user, await activeDelegationsTo(user), request, workflow);
+  const candidates = actionableSteps(user, await loadActorContext(user, [workflow]), request, workflow);
 
   let capacity: ActionableStep | undefined;
   if (requestedStep !== undefined && requestedStep !== null) {

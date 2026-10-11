@@ -76,7 +76,10 @@ export type StepCondition = z.infer<typeof StepConditionInput>;
 export const WorkflowStepInput = z.object({
   stepIndex: z.number({ error: 'Step index is required' }).int().min(0),
   stepName: requiredText('Step name is required').max(100, 'Step name is too long'),
-  requiredRole: RoleSchema,
+  /** Who may act: everyone with this role... */
+  requiredRole: RoleSchema.nullish(),
+  /** ...or the members of this approver group. Exactly one of the two is set. */
+  approverGroupId: z.string().regex(/^[a-f0-9]{24}$/, 'Unknown approver group').nullish(),
   requiredApprovals: z.number().int().min(1, 'Required approvals must be at least 1').nullish(),
   slaHours: z.number().int().min(1, 'SLA hours must be at least 1 if specified').nullish(),
   /** Steps sharing a stage run in parallel. Defaults to the step's position (sequential). */
@@ -111,6 +114,13 @@ export const CreateWorkflowInput = z
     });
 
     wf.steps.forEach((step, i) => {
+      if (!step.requiredRole === !step.approverGroupId) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['steps', i, 'requiredRole'],
+          message: 'Each step needs either a required role or an approver group (not both)',
+        });
+      }
       step.condition?.rules.forEach((rule, r) => {
         const path = ['steps', i, 'condition', 'rules', r];
         const field = byKey.get(rule.field);
@@ -167,6 +177,15 @@ export const CreateDelegationInput = z.object({
 });
 export type CreateDelegationInput = z.infer<typeof CreateDelegationInput>;
 
+// Named sets of users (e.g. "Finance team") that workflow steps can be assigned to.
+export const ApproverGroupInput = z.object({
+  name: requiredText('Group name is required').max(60, 'Group name is too long'),
+  description: z.string().max(300, 'Description is too long').nullish(),
+  memberIds: z.array(z.string().regex(/^[a-f0-9]{24}$/, 'Unknown user')).max(200, 'A group can have at most 200 members').default([]),
+});
+export type ApproverGroupInput = z.infer<typeof ApproverGroupInput>;
+export type ApproverGroupPayload = z.input<typeof ApproverGroupInput>;
+
 export const UpdateRoleInput = z.object({
   role: RoleSchema,
 });
@@ -203,7 +222,11 @@ export interface WorkflowField {
 export interface WorkflowStep {
   stepIndex: number;
   stepName: string;
-  requiredRole: Role;
+  /** Set for role-based steps. */
+  requiredRole?: Role | null;
+  /** Set for group-based steps (with the group's name at save time, for display). */
+  approverGroupId?: string | null;
+  approverGroupName?: string | null;
   requiredApprovals: number;
   slaHours?: number | null;
   /** Steps with the same stage run in parallel; stages run in order. */
@@ -271,6 +294,16 @@ export interface ApprovalRequest {
   originalRequiredRole?: Role | null;
   /** Only on single-request reads: what the viewer can act on. */
   actionableSteps?: ActionableStep[];
+}
+
+export interface ApproverGroup {
+  id: string;
+  name: string;
+  description?: string | null;
+  memberIds: string[];
+  /** Resolved for display. */
+  members: { id: string; name: string; email: string }[];
+  createdAt: string;
 }
 
 export interface Delegation {
