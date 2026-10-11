@@ -332,3 +332,31 @@ describe('audit hash chain', () => {
     assert.equal(res.body.brokenAtIndex, 0);
   });
 });
+
+describe('health and database availability', () => {
+  test('paths outside /api are a plain 404 that never needs the database', async () => {
+    const res = await api.get('/').expect(404);
+    assert.equal(res.body.message, 'Route not found');
+  });
+
+  test('/health/ready reports a reachable database', async () => {
+    const res = await api.get('/health/ready').expect(200);
+    assert.deepEqual(res.body, { status: 'ok', database: 'ok', missingConfig: [] });
+  });
+
+  test('missing database config is a 503 for API calls and named (not leaked) by readiness', async () => {
+    const saved = process.env.MONGODB_URI;
+    delete process.env.MONGODB_URI;
+    try {
+      const apiRes = await api.get('/api/workflows').set(auth('alice')).expect(503);
+      assert.equal(apiRes.body.message, 'Database is not configured');
+      await api.get('/health').expect(200);
+
+      const ready = await api.get('/health/ready').expect(503);
+      assert.equal(ready.body.database, 'not_configured');
+      assert.deepEqual(ready.body.missingConfig, ['MONGODB_URI']);
+    } finally {
+      process.env.MONGODB_URI = saved;
+    }
+  });
+});
