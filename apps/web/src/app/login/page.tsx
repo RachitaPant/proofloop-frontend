@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
-import { CheckCircle2, Workflow, Shield, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Workflow, Shield, ShieldCheck } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 
@@ -53,11 +54,22 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-linear-to-br from-surface-50 via-white to-brand-50">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-navy-500 hover:text-navy-900 -mt-8 mb-8"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to home
+        </Link>
         <div className="text-center mb-14">
-          <div className="inline-flex items-center gap-2 font-display text-4xl sm:text-5xl font-bold text-navy-900">
+          <Link
+            href="/"
+            aria-label="ProofLoop home"
+            className="inline-flex items-center gap-2 font-display text-4xl sm:text-5xl font-bold text-navy-900 hover:opacity-90"
+          >
             <ShieldCheck className="w-10 h-10 text-brand-600" />
             Proof<span className="text-brand-600">Loop</span>
-          </div>
+          </Link>
           <p className="text-lg text-navy-500 mt-3">
             Verifiable infrastructure for approvals & handoffs
           </p>

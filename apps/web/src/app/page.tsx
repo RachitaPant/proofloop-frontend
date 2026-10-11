@@ -38,8 +38,6 @@ const NAV_LINKS = [
   { label: 'Use Cases', href: '#industries' },
 ];
 
-const TRUSTED_LOGOS = ['Google', 'Microsoft', 'Notion', 'Slack', 'GitHub', 'Vercel'];
-
 const OLD_WAY = [
   'Requests get lost in inboxes',
   'No visibility into status',
@@ -336,26 +334,6 @@ export default function LandingPage() {
             </div>
           </div>
           <DashboardMock />
-        </div>
-      </section>
-
-      {/* Trusted by */}
-      <section className="max-w-7xl mx-auto px-6 lg:px-8 py-12 border-b border-surface-200">
-        <div className="flex flex-col lg:flex-row items-center justify-between gap-8">
-          <div>
-            <div className="text-xs font-semibold tracking-widest text-navy-400 mb-4">
-              TRUSTED BY FORWARD-THINKING TEAMS
-            </div>
-            <div className="flex flex-wrap items-center gap-x-10 gap-y-4 text-navy-400 font-semibold text-lg">
-              {TRUSTED_LOGOS.map((l) => (
-                <span key={l}>{l}</span>
-              ))}
-            </div>
-          </div>
-          <div className="text-right shrink-0">
-            <p className="font-display text-lg font-semibold text-navy-800">&ldquo;Simple, powerful, transparent.&rdquo;</p>
-            <p className="text-sm text-navy-400 mt-1">— Teams love ProofLoop</p>
-          </div>
         </div>
       </section>
 
