@@ -332,3 +332,87 @@ describe('audit hash chain', () => {
     assert.equal(res.body.brokenAtIndex, 0);
   });
 });
+
+describe('cookie sessions (web app)', () => {
+  const ORIGIN = 'http://localhost:3000';
+  const cookieNames = (res: supertest.Response) =>
+    ([] as string[]).concat(res.headers['set-cookie'] ?? []).map((c) => c.split('=')[0]);
+  const setCookie = (res: supertest.Response, name: string) =>
+    ([] as string[]).concat(res.headers['set-cookie'] ?? []).find((c) => c.startsWith(`${name}=`)) ?? '';
+
+  async function cookieLogin() {
+    const agent = supertest.agent((await import('../src/app')).default);
+    const res = await agent.post('/api/auth/login').set('Origin', ORIGIN).send({ email: 'alice@test.dev', password: 'password123' }).expect(200);
+    return { agent, res };
+  }
+
+  test('login sets httpOnly access + refresh cookies with the right scope', async () => {
+    const { res } = await cookieLogin();
+    assert.deepEqual(cookieNames(res).sort(), ['pl_at', 'pl_rt']);
+    const access = setCookie(res, 'pl_at');
+    const refresh = setCookie(res, 'pl_rt');
+    assert.match(access, /HttpOnly/i);
+    assert.match(access, /SameSite=Lax/i);
+    assert.match(access, /Path=\//);
+    assert.match(refresh, /HttpOnly/i);
+    assert.match(refresh, /Path=\/api\/auth/);
+  });
+
+  test('the access cookie authenticates /me and reads; bearer tokens still work', async () => {
+    const { agent } = await cookieLogin();
+    const me = await agent.get('/api/auth/me').expect(200);
+    assert.equal(me.body.email, 'alice@test.dev');
+    assert.equal(me.body.passwordHash, undefined);
+    await agent.get('/api/requests/mine').expect(200);
+    await api.get('/api/auth/me').set(auth('alice')).expect(200);
+  });
+
+  test('cookie-authenticated writes must come from a trusted origin', async () => {
+    const { agent } = await cookieLogin();
+    const wf = await createWorkflow('admin', [{ requiredRole: 'REVIEWER' }]);
+    await agent.post('/api/requests').set('Origin', 'https://evil.example').send({ title: 'x', workflowId: wf.id }).expect(403);
+    await agent.post('/api/requests').set('Sec-Fetch-Site', 'cross-site').send({ title: 'x', workflowId: wf.id }).expect(403);
+    await agent.post('/api/requests').set('Origin', ORIGIN).send({ title: 'x', workflowId: wf.id }).expect(200);
+    await agent.post('/api/auth/refresh').set('Origin', 'https://evil.example').expect(403);
+  });
+
+  test('refresh rotates the token; replaying an old one revokes the whole family', async () => {
+    const { agent, res: loginRes } = await cookieLogin();
+    const firstRefresh = setCookie(loginRes, 'pl_rt').split(';')[0]!;
+
+    const rotated = await agent.post('/api/auth/refresh').set('Origin', ORIGIN).expect(200);
+    assert.equal(rotated.body.email, 'alice@test.dev');
+    assert.notEqual(setCookie(rotated, 'pl_rt').split(';')[0], firstRefresh);
+
+    // Replaying the original token inside the grace window: rejected, family intact.
+    await api.post('/api/auth/refresh').set('Cookie', firstRefresh).expect(401);
+    await agent.post('/api/auth/refresh').set('Origin', ORIGIN).expect(200);
+
+    // Outside the grace window the replay is treated as theft.
+    const RefreshToken = (await import('../src/models/RefreshToken')).RefreshToken;
+    await RefreshToken.updateMany({ revokedAt: { $ne: null } }, { $set: { revokedAt: new Date(Date.now() - 60_000) } });
+    await api.post('/api/auth/refresh').set('Cookie', firstRefresh).expect(401);
+    await agent.post('/api/auth/refresh').set('Origin', ORIGIN).expect(401);
+  });
+
+  test('refresh tokens are stored hashed, never raw', async () => {
+    const { res } = await cookieLogin();
+    const raw = setCookie(res, 'pl_rt').split(';')[0]!.split('=')[1]!;
+    const RefreshToken = (await import('../src/models/RefreshToken')).RefreshToken;
+    assert.equal(await RefreshToken.countDocuments({ tokenHash: raw }), 0);
+    assert.equal(await RefreshToken.countDocuments({ tokenHash: { $exists: true } }) > 0, true);
+  });
+
+  test('logout clears cookies and revokes the session', async () => {
+    const { agent } = await cookieLogin();
+    const out = await agent.post('/api/auth/logout').set('Origin', ORIGIN).expect(204);
+    assert.ok(cookieNames(out).includes('pl_at'));
+    await agent.get('/api/auth/me').expect(401);
+    await agent.post('/api/auth/refresh').set('Origin', ORIGIN).expect(401);
+  });
+
+  test('refresh with no cookie is 401, and /me without credentials is 401', async () => {
+    await api.post('/api/auth/refresh').expect(401);
+    await api.get('/api/auth/me').expect(401);
+  });
+});

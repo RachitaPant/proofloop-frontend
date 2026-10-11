@@ -24,7 +24,7 @@ Requires Node 22+ and pnpm (`corepack enable`).
 ```bash
 pnpm install
 cp apps/api/.env.example apps/api/.env   # set MONGODB_URI and a 32+ char JWT_SECRET
-echo "NEXT_PUBLIC_API_URL=http://localhost:8080" > apps/web/.env
+cp apps/web/.env.example apps/web/.env       # API_URL=http://localhost:8080
 pnpm dev                                 # api on :8080, web on :3000
 ```
 
@@ -47,6 +47,19 @@ In development the API seeds demo users on an empty database:
 
 CI (`.github/workflows/ci.yml`) runs typecheck, test and build on every push
 to `main` and on every pull request.
+
+## Authentication
+
+- **Web app:** the browser only talks to the web app's own origin; `/api/*` is
+  proxied to the API (Next.js rewrites), so the session lives in first-party,
+  `httpOnly`, `SameSite=Lax` cookies that page scripts can't read:
+  a 15-minute access JWT and a rotating refresh token (30 days, stored hashed).
+  The client refreshes silently on a 401. Replaying an already-rotated refresh
+  token revokes that whole login's token family (theft detection).
+- **CSRF:** cookie-authenticated writes must come from an allowed origin
+  (`CORS_ALLOWED_ORIGINS`), on top of SameSite=Lax.
+- **API clients** (Postman, scripts, agents) send `Authorization: Bearer <token>`
+  using the `token` returned by `/api/auth/login`.
 
 ## How approvals work
 

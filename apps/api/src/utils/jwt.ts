@@ -12,11 +12,13 @@ function getSecret(): string {
 }
 
 // subject = email, "role" claim, HS256 (same token shape as the Spring Boot backend).
-export function generateToken(email: string, role: Role): string {
+// Defaults to JWT_EXPIRATION_MS (the bearer token returned to API clients);
+// browser sessions pass a much shorter lifetime and refresh via cookie.
+export function generateToken(email: string, role: Role, expiresInSeconds = Math.floor(EXPIRATION_MS / 1000)): string {
   return jwt.sign({ role }, getSecret(), {
     algorithm: 'HS256',
     subject: email,
-    expiresIn: Math.floor(EXPIRATION_MS / 1000),
+    expiresIn: expiresInSeconds,
   });
 }
 

@@ -4,7 +4,9 @@ import { User, type UserDoc } from '../models/User';
 import { generateToken } from '../utils/jwt';
 import { BadRequestException } from '../utils/errors';
 
-function toAuthResponse(user: UserDoc): AuthResponse {
+// The bearer token in the body serves API clients. The web app ignores it and
+// relies on the httpOnly cookies set by the route (see session.service).
+export function toAuthResponse(user: UserDoc): AuthResponse {
   return {
     token: generateToken(user.email, user.role),
     id: user.id,
@@ -16,20 +18,19 @@ function toAuthResponse(user: UserDoc): AuthResponse {
 
 // Self-registration always creates a USER. Elevated roles are granted only by
 // an ADMIN via PATCH /api/admin/users/:id/role; the client never picks its role.
-export async function register({ name, email, password }: RegisterInput): Promise<AuthResponse> {
+export async function register({ name, email, password }: RegisterInput): Promise<UserDoc> {
   if (await User.exists({ email })) {
     throw new BadRequestException('Email already registered');
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
-  const user = await User.create({ name, email, passwordHash, role: 'USER' });
-  return toAuthResponse(user);
+  return User.create({ name, email, passwordHash, role: 'USER' });
 }
 
-export async function login({ email, password }: LoginInput): Promise<AuthResponse> {
+export async function login({ email, password }: LoginInput): Promise<UserDoc> {
   const user = await User.findOne({ email });
   if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
     throw new BadRequestException('Invalid credentials');
   }
-  return toAuthResponse(user);
+  return user;
 }

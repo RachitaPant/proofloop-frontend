@@ -23,8 +23,9 @@ Environment variables (Production and Preview):
 | `MONGODB_URI`          | Atlas connection string                                      |
 | `MONGODB_DATABASE`     | `proofloop`                                                  |
 | `JWT_SECRET`           | Random string, **at least 32 characters**                    |
-| `JWT_EXPIRATION_MS`    | `86400000` (24h)                                             |
-| `CORS_ALLOWED_ORIGINS` | The web app's URL(s), comma-separated                        |
+| `JWT_EXPIRATION_MS`    | `86400000` (24h): bearer tokens for API clients              |
+| `ACCESS_TOKEN_TTL_SECONDS` / `REFRESH_TOKEN_TTL_DAYS` | Optional; browser session cookies (default 900 / 30) |
+| `CORS_ALLOWED_ORIGINS` | The web app's URL(s), comma-separated. `*` matches within one domain label, so add `https://proofloop-frontend-*-<team>.vercel.app` to let preview deployments write |
 | `CRON_SECRET`          | Random string; authorises the daily SLA cron                 |
 | `NODE_ENV`             | `production` (disables the demo-data seeder)                 |
 
@@ -34,7 +35,9 @@ The SLA escalation cron runs daily (the Hobby plan's limit), configured in
 ## 3. Web project (`apps/web`)
 
 New Vercel project → same repo → **Root Directory: `apps/web`**, Framework
-Preset: **Next.js**. Set `NEXT_PUBLIC_API_URL` to the API project's URL.
+Preset: **Next.js**. Set `API_URL` to the API project's URL (the existing
+`NEXT_PUBLIC_API_URL` also works). The browser never calls the API directly:
+`/api/*` on the web app is proxied there, which keeps session cookies first-party.
 
 ## Moving existing Vercel projects to the monorepo
 

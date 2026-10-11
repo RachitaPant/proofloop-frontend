@@ -13,8 +13,18 @@ see "Divergence from Spring Boot".
 
 - **Registration** always creates a `USER`; any `role` in the body is ignored.
   Admins grant `REVIEWER`/`ADMIN` via `PATCH /api/admin/users/:id/role`.
-- **401** = missing/invalid/expired token (client should re-login);
-  **403** = authenticated but not allowed.
+- **Sessions:** the web app authenticates with httpOnly cookies (15-minute
+  access JWT + rotating refresh token, stored as a SHA-256 hash in
+  `refresh_tokens`); API clients use `Authorization: Bearer`. Endpoints:
+  `POST /api/auth/login|register` (start a session, also return a bearer
+  token), `POST /api/auth/refresh` (rotate), `POST /api/auth/logout`
+  (revoke the token family), `GET /api/auth/me`. Reusing a rotated refresh
+  token more than 10s later revokes the whole family.
+- **CSRF:** cookie-authenticated writes, refresh and logout require an
+  allowed `Origin` (or `Sec-Fetch-Site: same-origin`). Bearer requests skip
+  this, since browsers never attach them automatically.
+- **401** = missing/invalid/expired credentials (the web app refreshes, then
+  re-logs in); **403** = authenticated but not allowed.
 - **Requests** are visible only to their creator, admins, anyone who already
   acted on them, and anyone eligible to act on the current step. Others get 404.
 - **No self-approval**: a request's creator can't act on it.
@@ -84,7 +94,7 @@ See [DEPLOYMENT.md](../../DEPLOYMENT.md). On Vercel:
   `vercel.json` (e.g. `"0 * * * *"`).
 - The demo seeder doesn't run on Vercel (no startup phase). Run the API
   locally once against the same `MONGODB_URI`, or register through the UI.
-- `AUTH_RATE_LIMIT` (default 20 attempts per IP per 15 minutes) is counted
+- `AUTH_RATE_LIMIT` (default 20 login/register attempts per IP per 15 minutes) is counted
   per function instance, so treat it as a speed bump rather than a hard limit.
 - `public/` is intentionally empty: Vercel expects a static output directory
   when a project has a build command.

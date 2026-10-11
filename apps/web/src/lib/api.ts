@@ -1,39 +1,62 @@
-import axios from 'axios';
+import axios, { type InternalAxiosRequestConfig } from 'axios';
 import type { CreateRequestInput, CreateWorkflowInput } from '@proofloop/shared';
 import { AuthResponse, Workflow, Request, Analytics, User, Role, ChainVerification } from '@/types';
-import { clearSession, getToken } from '@/lib/session';
 
-// Strip trailing slashes: "https://host/" + "/api" would produce "//api", which
-// Vercel answers with a redirect that browsers refuse to follow on CORS preflights.
-const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080').replace(/\/+$/, '');
-
+// Same-origin: next.config.js proxies /api/* to the API, and the session lives
+// in httpOnly cookies the browser attaches automatically. No token is ever
+// visible to page scripts.
 const api = axios.create({
-  baseURL: `${API_URL}/api`,
+  baseURL: '/api',
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Add token to requests
-api.interceptors.request.use((config) => {
-  const token = getToken();
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+// ---------------------------------------------------------------------------
+// Silent refresh. The access cookie lives 15 minutes; on a 401 we rotate the
+// refresh cookie once and replay the request. Concurrent 401s share a single
+// refresh call. If refreshing fails we still replay once, because another tab
+// may have just rotated the cookies; only a second 401 ends the session.
+// ---------------------------------------------------------------------------
 
-// 401 means the token is missing/expired/invalid (403 is a permission error
-// and is left to the caller). Clearing the session signs the user out;
-// ProtectedRoute then redirects to /login.
+const NO_REFRESH = ['/auth/login', '/auth/register', '/auth/refresh', '/auth/logout'];
+
+let refreshInFlight: Promise<boolean> | null = null;
+let onSessionExpired: () => void = () => {};
+
+/** Called once a request is still unauthorised after a refresh attempt. */
+export function setSessionExpiredHandler(handler: () => void) {
+  onSessionExpired = handler;
+}
+
+function refreshSession(): Promise<boolean> {
+  refreshInFlight ??= api
+    .post('/auth/refresh')
+    .then(() => true)
+    .catch(() => false)
+    .finally(() => {
+      refreshInFlight = null;
+    });
+  return refreshInFlight;
+}
+
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    const isAuthCall = error.config?.url?.startsWith('/auth/');
-    if (error.response?.status === 401 && !isAuthCall && typeof window !== 'undefined') {
-      clearSession();
+  async (error) => {
+    const original = error.config as (InternalAxiosRequestConfig & { _retried?: boolean }) | undefined;
+    const url = original?.url ?? '';
+    if (error.response?.status !== 401 || !original || original._retried || NO_REFRESH.some((p) => url.startsWith(p))) {
+      return Promise.reject(error);
     }
-    return Promise.reject(error);
+
+    original._retried = true;
+    await refreshSession();
+    try {
+      return await api(original);
+    } catch (retryError) {
+      if (axios.isAxiosError(retryError) && retryError.response?.status === 401) onSessionExpired();
+      throw retryError;
+    }
   },
 );
 
@@ -43,6 +66,8 @@ export const authApi = {
     api.post<AuthResponse>('/auth/register', data),
   login: (data: { email: string; password: string }) =>
     api.post<AuthResponse>('/auth/login', data),
+  logout: () => api.post('/auth/logout'),
+  me: () => api.get<User>('/auth/me'),
 };
 
 // Workflows

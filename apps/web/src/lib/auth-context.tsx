@@ -1,43 +1,68 @@
 'use client';
 
-import React, { createContext, useCallback, useContext, useMemo, useSyncExternalStore } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { isAxiosError } from 'axios';
 import toast from 'react-hot-toast';
-import { AuthResponse } from '@/types';
-import { authApi } from '@/lib/api';
+import type { AuthResponse, User } from '@/types';
+import { authApi, setSessionExpiredHandler } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';
-import { clearSession, getUserSnapshot, saveSession, subscribe } from '@/lib/session';
 
 interface AuthContextType {
-  user: AuthResponse | null;
+  user: User | null;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
-  logout: () => void;
-  /** True until the client has read the stored session (always true during SSR/hydration). */
+  logout: () => Promise<void>;
+  /** True until the first /auth/me answer arrives. */
   isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const noopSubscribe = () => () => {};
+export const meQueryKey = ['auth', 'me'] as const;
+
+const toUser = ({ id, name, email, role }: AuthResponse): User => ({ id, name, email, role });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  // The session is external state (localStorage), read without effects. The
-  // server snapshot is null/false, so hydration matches the server HTML and the
-  // client then re-renders with the stored session.
-  const userJson = useSyncExternalStore(subscribe, getUserSnapshot, () => null);
-  const hydrated = useSyncExternalStore(noopSubscribe, () => true, () => false);
-  const user = useMemo<AuthResponse | null>(() => (userJson ? JSON.parse(userJson) : null), [userJson]);
+  // The session is the httpOnly cookie, which page scripts can't read, so
+  // "who am I" is a server question. A 401 means signed out, not an error.
+  const me = useQuery({
+    queryKey: meQueryKey,
+    queryFn: async () => {
+      try {
+        return (await authApi.me()).data;
+      } catch (error) {
+        if (isAxiosError(error) && error.response?.status === 401) return null;
+        throw error;
+      }
+    },
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+
+  // Tokens used to live in localStorage; drop any left over from older builds.
+  useEffect(() => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+  }, []);
+
+  // Refresh failed mid-session: forget everything; ProtectedRoute redirects.
+  useEffect(() => {
+    setSessionExpiredHandler(() => {
+      queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== meQueryKey[0] });
+      queryClient.setQueryData(meQueryKey, null);
+    });
+  }, [queryClient]);
 
   const startSession = useCallback(
     (auth: AuthResponse, message: string) => {
       // Never show one user's cached data to the next.
       queryClient.clear();
-      saveSession(auth);
+      queryClient.setQueryData(meQueryKey, toUser(auth));
       toast.success(message);
       router.push('/dashboard');
     },
@@ -70,16 +95,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [startSession],
   );
 
-  const logout = useCallback(() => {
-    clearSession();
+  const logout = useCallback(async () => {
+    // Clear locally even if the server call fails (e.g. offline).
+    await authApi.logout().catch(() => {});
     queryClient.clear();
+    queryClient.setQueryData(meQueryKey, null);
     toast.success('Logged out successfully');
     router.push('/login');
   }, [queryClient, router]);
 
   const value = useMemo(
-    () => ({ user, login, register, logout, isLoading: !hydrated }),
-    [user, login, register, logout, hydrated],
+    () => ({ user: me.data ?? null, login, register, logout, isLoading: me.isPending }),
+    [me.data, me.isPending, login, register, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
