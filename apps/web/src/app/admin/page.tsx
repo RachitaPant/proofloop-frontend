@@ -11,6 +11,7 @@ import Spinner from '@/components/ui/Spinner';
 import ProgressBar from '@/components/ui/ProgressBar';
 import { Select } from '@/components/ui/Input';
 import EmptyState from '@/components/ui/EmptyState';
+import ApproverGroups from '@/components/admin/ApproverGroups';
 
 const STAT_TILES = (a: Analytics) => [
   { icon: Users, iconTone: 'text-brand-600 bg-brand-50', value: a.totalUsers, label: 'Total Users' },
@@ -157,6 +158,8 @@ export default function AdminPage() {
           </div>
         </CardBody>
       </Card>
+
+      <ApproverGroups users={users} />
     </div>
   );
 }

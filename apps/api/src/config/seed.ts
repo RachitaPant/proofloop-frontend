@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import { User } from '../models/User';
 import { Workflow } from '../models/Workflow';
 import { Request } from '../models/Request';
+import { ApproverGroup } from '../models/ApproverGroup';
 
 // Demo data for local development. Never runs when NODE_ENV=production.
 export async function seedData() {
@@ -21,7 +22,7 @@ export async function seedData() {
     role: 'ADMIN',
   });
 
-  await User.create({
+  const reviewer = await User.create({
     name: 'Reviewer User',
     email: 'reviewer@proofloop.com',
     passwordHash: await bcrypt.hash('reviewer123', 10),
@@ -52,7 +53,15 @@ export async function seedData() {
     steps: [{ stepIndex: 0, stepName: 'Manager Review', requiredRole: 'REVIEWER' }],
   });
 
-  // Shows off conditional routing and a parallel stage.
+  // Shows off approver groups: Legal review goes to this team, not a role.
+  const legalTeam = await ApproverGroup.create({
+    name: 'Legal team',
+    description: 'Contract and compliance reviewers',
+    memberIds: [reviewer.id],
+    createdBy: admin.id,
+  });
+
+  // Shows off conditional routing, a parallel stage and a group-assigned step.
   await Workflow.create({
     name: 'Purchase Approval',
     description: 'Manager sign-off, then legal and security in parallel; the CFO only for large amounts.',
@@ -63,7 +72,7 @@ export async function seedData() {
     ],
     steps: [
       { stepIndex: 0, stepName: 'Manager review', requiredRole: 'REVIEWER', stage: 0, slaHours: 24 },
-      { stepIndex: 1, stepName: 'Legal review', requiredRole: 'REVIEWER', stage: 1 },
+      { stepIndex: 1, stepName: 'Legal review', approverGroupId: legalTeam.id, approverGroupName: legalTeam.name, stage: 1 },
       { stepIndex: 2, stepName: 'Security review', requiredRole: 'REVIEWER', stage: 1 },
       {
         stepIndex: 3,

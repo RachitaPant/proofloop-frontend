@@ -17,5 +17,6 @@ export {
   type ApprovalRequest as Request,
   type ChainVerification,
   type Delegation,
+  type ApproverGroup,
   type Analytics,
 } from '@proofloop/shared';

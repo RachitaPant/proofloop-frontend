@@ -74,6 +74,9 @@ to `main` and on every pull request.
   evaluated with a fixed set of operators (never `eval`). The routing is
   decided when the request is created and stored with it. The request form
   previews the route live, using the same engine (`packages/shared`).
+- **Approver groups:** a step can go to a named team (e.g. *Finance team*)
+  instead of a role. Admins manage groups on the admin page; membership is read
+  when someone acts, so changes apply to open requests immediately.
 - **Delegation:** anyone can let a named colleague approve in their place for
   up to 90 days. It covers approval steps only (never admin access) and ends if
   the delegator loses the role. The audit trail records "on behalf of".

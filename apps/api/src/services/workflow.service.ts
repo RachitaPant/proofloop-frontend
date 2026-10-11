@@ -1,10 +1,20 @@
 import { ACTIVE_STATUSES, normalizeStages, type CreateWorkflowInput } from '@proofloop/shared';
 import { Workflow } from '../models/Workflow';
+import { ApproverGroup } from '../models/ApproverGroup';
 import { Request } from '../models/Request';
 import type { UserDoc } from '../models/User';
-import { AccessDeniedException, ConflictException, ResourceNotFoundException } from '../utils/errors';
+import { AccessDeniedException, ConflictException, ResourceNotFoundException, ValidationException } from '../utils/errors';
 
 export async function createWorkflow(user: UserDoc, { name, description, fields, steps }: CreateWorkflowInput) {
+  // Group-assigned steps must point at real groups; keep the name for display.
+  const groupIds = [...new Set(steps.flatMap((s) => (s.approverGroupId ? [s.approverGroupId] : [])))];
+  const groups = groupIds.length ? await ApproverGroup.find({ _id: { $in: groupIds } }) : [];
+  const groupName = new Map(groups.map((g) => [g.id as string, g.name]));
+  const unknown = steps.flatMap((s, i) =>
+    s.approverGroupId && !groupName.has(s.approverGroupId) ? [[`steps[${i}].approverGroupId`, 'Unknown approver group']] : [],
+  );
+  if (unknown.length) throw new ValidationException(Object.fromEntries(unknown));
+
   const workflow = await Workflow.create({
     name,
     description,
@@ -15,7 +25,9 @@ export async function createWorkflow(user: UserDoc, { name, description, fields,
     steps: normalizeStages(steps).map((s, i) => ({
       stepIndex: i,
       stepName: s.stepName,
-      requiredRole: s.requiredRole,
+      requiredRole: s.approverGroupId ? null : s.requiredRole,
+      approverGroupId: s.approverGroupId ?? null,
+      approverGroupName: s.approverGroupId ? groupName.get(s.approverGroupId) : null,
       requiredApprovals: s.requiredApprovals ?? 1,
       slaHours: s.slaHours ?? null,
       stage: s.stage,

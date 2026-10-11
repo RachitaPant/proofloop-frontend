@@ -1,5 +1,7 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
 import type {
+  ApproverGroup,
+  ApproverGroupPayload,
   CreateDelegationInput,
   CreateRequestPayload,
   CreateWorkflowPayload,
@@ -102,6 +104,14 @@ export const delegationApi = {
   mine: () => api.get<MyDelegations>('/delegations'),
   create: (data: CreateDelegationInput) => api.post<Delegation>('/delegations', data),
   revoke: (id: string) => api.delete<Delegation>(`/delegations/${id}`),
+};
+
+// Approver groups (readable by everyone signed in; managed by admins)
+export const groupApi = {
+  list: () => api.get<ApproverGroup[]>('/groups'),
+  create: (data: ApproverGroupPayload) => api.post<ApproverGroup>('/groups', data),
+  update: (id: string, data: ApproverGroupPayload) => api.put<ApproverGroup>(`/groups/${id}`, data),
+  delete: (id: string) => api.delete(`/groups/${id}`),
 };
 
 // Admin

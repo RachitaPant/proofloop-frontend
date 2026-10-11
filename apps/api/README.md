@@ -53,6 +53,12 @@ The routing rules are pure functions in `packages/shared/src/engine.ts`
 - **Which step:** approve/reject take an optional `stepIndex`, required only
   when the viewer can act on several parallel steps. `GET /requests/:id` and
   `/requests/pending` include `actionableSteps` for the viewer.
+- **Approver groups** (`/api/groups`): a step has exactly one assignee,
+  `requiredRole` or `approverGroupId` (the group's name is stored on the step for
+  display and kept current on rename). Membership is checked at action time.
+  Anyone signed in can list groups; only admins create, update or delete them;
+  a group still used by a workflow can't be deleted (409). Escalated group steps
+  go to ADMIN like role steps, and a delegate can act for a group member.
 - **Delegation** (`/api/delegations`): time-boxed (max 90 days), one active per
   delegator, revocable by the delegator or an admin. It grants the delegator's
   role on approval steps only, and only while the delegator still holds it.
@@ -79,6 +85,7 @@ The routing rules are pure functions in `packages/shared/src/engine.ts`
 - `GET /api/admin/users`: list users (password hashes are never serialized)
 - `PATCH /api/admin/users/:id/role`: change a user's role (not your own)
 - `GET|POST /api/delegations`, `DELETE /api/delegations/:id`: approval delegation
+- `GET|POST /api/groups`, `PUT|DELETE /api/groups/:id`: approver groups
 - `GET /api/auth/me`, `POST /api/auth/refresh`, `POST /api/auth/logout`: cookie sessions
 
 ## Divergence from Spring Boot

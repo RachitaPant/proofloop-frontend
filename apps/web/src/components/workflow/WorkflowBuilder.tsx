@@ -8,7 +8,7 @@ import { Role } from '@/types';
 import Button from '@/components/ui/Button';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { getErrorMessage } from '@/lib/errors';
-import { useCreateWorkflow } from '@/lib/queries';
+import { useCreateWorkflow, useGroups } from '@/lib/queries';
 
 // Form state is kept as strings (what inputs hold) and converted to the API
 // shape on submit. The server validates again with the shared Zod schema.
@@ -28,7 +28,8 @@ interface RuleDraft {
 
 interface StepDraft {
   stepName: string;
-  requiredRole: Role;
+  /** "role:REVIEWER" or "group:<id>" */
+  assignee: string;
   requiredApprovals: string;
   slaHours: string;
   parallelWithPrevious: boolean;
@@ -60,7 +61,7 @@ const OPERATORS: Record<FieldType, { value: ConditionOperator; label: string }[]
 
 const emptyStep = (): StepDraft => ({
   stepName: '',
-  requiredRole: Role.REVIEWER,
+  assignee: `role:${Role.REVIEWER}`,
   requiredApprovals: '1',
   slaHours: '',
   parallelWithPrevious: false,
@@ -95,7 +96,7 @@ const EXAMPLE: { name: string; description: string; fields: FieldDraft[]; steps:
     {
       ...emptyStep(),
       stepName: 'CFO approval',
-      requiredRole: Role.ADMIN,
+      assignee: `role:${Role.ADMIN}`,
       conditional: true,
       rules: [{ field: 'amount', operator: 'gt', value: '100000' }],
     },
@@ -108,6 +109,7 @@ export default function WorkflowBuilder({ onCreated, onCancel }: { onCreated: ()
   const [fields, setFields] = useState<FieldDraft[]>([]);
   const [steps, setSteps] = useState<StepDraft[]>([emptyStep()]);
   const createWorkflow = useCreateWorkflow();
+  const { data: groups = [] } = useGroups();
 
   // Keys are derived from labels so conditions can reference them.
   const keysFor = (drafts: FieldDraft[]) => {
@@ -158,7 +160,8 @@ export default function WorkflowBuilder({ onCreated, onCancel }: { onCreated: ()
         return {
           stepIndex: i,
           stepName: s.stepName,
-          requiredRole: s.requiredRole,
+          requiredRole: s.assignee.startsWith('role:') ? (s.assignee.slice(5) as Role) : null,
+          approverGroupId: s.assignee.startsWith('group:') ? s.assignee.slice(6) : null,
           requiredApprovals: parseInt(s.requiredApprovals) || 1,
           slaHours: s.slaHours ? parseInt(s.slaHours) : null,
           stage,
@@ -301,10 +304,21 @@ export default function WorkflowBuilder({ onCreated, onCancel }: { onCreated: ()
 
             <div className="grid grid-cols-2 gap-3">
               <Input label="Step name" required value={s.stepName} onChange={(e) => updateStep(i, { stepName: e.target.value })} />
-              <Select label="Required role" value={s.requiredRole} onChange={(e) => updateStep(i, { requiredRole: e.target.value as Role })}>
-                <option value={Role.REVIEWER}>Reviewer</option>
-                <option value={Role.ADMIN}>Admin</option>
-                <option value={Role.USER}>User</option>
+              <Select label="Assigned to" value={s.assignee} onChange={(e) => updateStep(i, { assignee: e.target.value })}>
+                <optgroup label="Anyone with role">
+                  <option value={`role:${Role.REVIEWER}`}>Reviewer</option>
+                  <option value={`role:${Role.ADMIN}`}>Admin</option>
+                  <option value={`role:${Role.USER}`}>User</option>
+                </optgroup>
+                {groups.length > 0 && (
+                  <optgroup label="Approver group">
+                    {groups.map((g) => (
+                      <option key={g.id} value={`group:${g.id}`}>
+                        {g.name} ({g.members.length})
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
               </Select>
               <Input
                 label="Required approvals"

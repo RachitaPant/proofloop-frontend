@@ -297,3 +297,90 @@ describe('delegation', () => {
     await h.api.delete(`/api/delegations/${d.body.id}`).set(h.auth('admin')).expect(200);
   });
 });
+
+describe('approver groups', () => {
+  const inAWeek = () => new Date(Date.now() + 7 * 24 * 3600_000).toISOString();
+  const makeGroup = async (name: string, members: string[]) =>
+    (await h.api.post('/api/groups').set(h.auth('admin')).send({ name, memberIds: members.map((k) => h.ids[k]) }).expect(201)).body;
+
+  test('only admins manage groups; names are unique (case-insensitive); members must exist', async () => {
+    await h.api.post('/api/groups').set(h.auth('rev1')).send({ name: 'Nope' }).expect(403);
+    const g = await makeGroup('Treasury', ['bob']);
+    assert.deepEqual(g.members.map((m: { name: string }) => m.name), ['bob']);
+    await h.api.post('/api/groups').set(h.auth('admin')).send({ name: 'treasury' }).expect(409);
+    const bad = await h.api.post('/api/groups').set(h.auth('admin')).send({ name: 'X', memberIds: ['0123456789abcdef01234567'] }).expect(400);
+    assert.match(bad.body.memberIds, /not existing users/);
+
+    // Everyone signed in can read groups (the workflow builder lists them).
+    const list = await h.api.get('/api/groups').set(h.auth('alice')).expect(200);
+    assert.ok(list.body.some((x: { name: string }) => x.name === 'Treasury'));
+  });
+
+  test('a step takes a role or a group, never both or neither, and the group must exist', async () => {
+    const g = await makeGroup('Procurement', ['bob']);
+    const both = await h.api
+      .post('/api/workflows')
+      .set(h.auth('admin'))
+      .send({ name: 'x', steps: [step('S', 'REVIEWER', { approverGroupId: g.id })] })
+      .expect(400);
+    assert.match(both.body['steps[0].requiredRole'], /either a required role or an approver group/);
+    await h.api
+      .post('/api/workflows')
+      .set(h.auth('admin'))
+      .send({ name: 'x', steps: [{ stepIndex: 0, stepName: 'S', approverGroupId: '0123456789abcdef01234567' }] })
+      .expect(400);
+  });
+
+  test('group members approve whatever their role; non-members can’t; membership changes apply at once', async () => {
+    const g = await makeGroup('Finance team', ['bob']);
+    const wf = await h.createWorkflow('admin', { steps: [{ stepIndex: 0, stepName: 'Finance sign-off', approverGroupId: g.id }] });
+    assert.equal(wf.steps[0].approverGroupName, 'Finance team');
+    assert.equal(wf.steps[0].requiredRole, null);
+
+    const req = await h.createRequest('alice', wf.id);
+    assert.ok((await pendingIds('bob')).includes(req.id), 'bob is a USER but a member');
+    assert.ok(!(await pendingIds('rev1')).includes(req.id), 'reviewers outside the group don’t see it');
+    await approve('rev1', req.id).expect(400);
+
+    // Swap bob for rev1: takes effect on the in-flight request immediately.
+    await h.api.put(`/api/groups/${g.id}`).set(h.auth('admin')).send({ name: 'Finance team', memberIds: [h.ids.rev1] }).expect(200);
+    assert.ok(!(await pendingIds('bob')).includes(req.id));
+    const done = await approve('rev1', req.id).expect(200);
+    assert.equal(done.body.status, 'APPROVED');
+  });
+
+  test('a member can delegate a group step to a non-member', async () => {
+    const g = await makeGroup('Legal team', ['bob']);
+    const wf = await h.createWorkflow('admin', { steps: [{ stepIndex: 0, stepName: 'Legal', approverGroupId: g.id }] });
+    const req = await h.createRequest('alice', wf.id);
+    const d = await h.api.post('/api/delegations').set(h.auth('bob')).send({ toEmail: 'rev2@test.dev', endsAt: inAWeek() }).expect(201);
+
+    const res = await approve('rev2', req.id).expect(200);
+    assert.equal(res.body.history[0].onBehalfOf, h.ids.bob);
+    await h.api.delete(`/api/delegations/${d.body.id}`).set(h.auth('bob')).expect(200);
+  });
+
+  test('group steps escalate to admins after their SLA', async () => {
+    const g = await makeGroup('Slow team', ['bob']);
+    const wf = await h.createWorkflow('admin', { steps: [{ stepIndex: 0, stepName: 'Slow', approverGroupId: g.id, slaHours: 1 }] });
+    const req = await h.createRequest('alice', wf.id);
+    const { Request } = await import('../src/models/Request');
+    await Request.updateOne({ _id: req.id }, { $set: { 'stepStartTimes.0': new Date(Date.now() - 2 * 3600_000) } });
+    await h.api.post('/api/admin/trigger-sla-check').set(h.auth('admin')).expect(200);
+
+    assert.ok(!(await pendingIds('bob')).includes(req.id));
+    assert.equal((await approve('admin', req.id).expect(200)).body.status, 'APPROVED');
+  });
+
+  test('renaming a group updates workflows; a group in use can’t be deleted', async () => {
+    const g = await makeGroup('Ops', ['bob']);
+    const wf = await h.createWorkflow('admin', { steps: [{ stepIndex: 0, stepName: 'Ops check', approverGroupId: g.id }] });
+    await h.api.put(`/api/groups/${g.id}`).set(h.auth('admin')).send({ name: 'Operations', memberIds: [h.ids.bob] }).expect(200);
+    const after = await h.api.get(`/api/workflows/${wf.id}`).set(h.auth('admin')).expect(200);
+    assert.equal(after.body.steps[0].approverGroupName, 'Operations');
+
+    await h.api.delete(`/api/groups/${g.id}`).set(h.auth('admin')).expect(409);
+    const unused = await makeGroup('Temp', []);
+    await h.api.delete(`/api/groups/${unused.id}`).set(h.auth('admin')).expect(204);
+  });
+});

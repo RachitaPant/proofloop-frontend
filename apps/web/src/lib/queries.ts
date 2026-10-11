@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { CreateDelegationInput, CreateRequestPayload, CreateWorkflowPayload } from '@proofloop/shared';
+import type { ApproverGroupPayload, CreateDelegationInput, CreateRequestPayload, CreateWorkflowPayload } from '@proofloop/shared';
 import type { Role, User } from '@/types';
-import { adminApi, delegationApi, requestApi, workflowApi } from '@/lib/api';
+import { adminApi, delegationApi, groupApi, requestApi, workflowApi } from '@/lib/api';
 
 // Every server-state read and write in the app goes through these hooks, so
 // cache keys and invalidation rules live in one place.
@@ -20,6 +20,9 @@ export const queryKeys = {
   },
   delegations: {
     mine: () => ['delegations', 'mine'] as const,
+  },
+  groups: {
+    all: ['groups'] as const,
   },
   admin: {
     all: ['admin'] as const,
@@ -171,5 +174,34 @@ export function useRevokeDelegation() {
   return useMutation({
     mutationFn: async (id: string) => (await delegationApi.revoke(id)).data,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.delegations.mine() }),
+  });
+}
+
+export function useGroups() {
+  return useQuery({
+    queryKey: queryKeys.groups.all,
+    queryFn: async () => (await groupApi.list()).data,
+    meta: { errorMessage: 'Failed to load approver groups' },
+  });
+}
+
+export function useSaveGroup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id?: string; data: ApproverGroupPayload }) =>
+      (await (id ? groupApi.update(id, data) : groupApi.create(data))).data,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.groups.all });
+      // Renames show up on workflow steps.
+      queryClient.invalidateQueries({ queryKey: queryKeys.workflows.all });
+    },
+  });
+}
+
+export function useDeleteGroup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => groupApi.delete(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.groups.all }),
   });
 }
