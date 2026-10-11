@@ -22,10 +22,14 @@ export default function Sidebar() {
 
   return (
     <aside className="hidden md:flex w-60 shrink-0 flex-col border-r border-surface-200 bg-surface-50 h-screen sticky top-0">
-      <div className="h-16 flex items-center gap-2 px-5 border-b border-surface-200">
+      <Link
+        href="/"
+        aria-label="ProofLoop home"
+        className="h-16 flex items-center gap-2 px-5 border-b border-surface-200 hover:bg-surface-100 transition-colors"
+      >
         <ShieldCheck className="w-5 h-5 text-brand-600" />
         <span className="font-display font-bold text-navy-900">ProofLoop</span>
-      </div>
+      </Link>
 
       <nav className="flex-1 px-3 py-4 space-y-0.5">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
