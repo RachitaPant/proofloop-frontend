@@ -1,7 +1,7 @@
 import type { ErrorRequestHandler, Response } from 'express';
 import mongoose from 'mongoose';
 import type { ApiError } from '@proofloop/shared';
-import { HttpError } from '../utils/errors';
+import { HttpError, ValidationException } from '../utils/errors';
 
 function send(res: Response, status: number, error: string, message: string) {
   const body: ApiError = { timestamp: new Date().toISOString(), status, error, message };
@@ -9,6 +9,10 @@ function send(res: Response, status: number, error: string, message: string) {
 }
 
 export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
+  if (err instanceof ValidationException) {
+    return res.status(400).json(err.errors);
+  }
+
   if (err instanceof HttpError) {
     return send(res, err.status, err.error, err.message);
   }

@@ -2,15 +2,17 @@ import mongoose from 'mongoose';
 import { ACTIVE_STATUSES } from '@proofloop/shared';
 import { Request, type RequestDoc } from '../models/Request';
 import { Workflow, type WorkflowDoc } from '../models/Workflow';
+import { effectiveRequiredRole, pendingSteps } from './request.service';
 
 const HOUR_MS = 60 * 60 * 1000;
 
-// Escalates a request's current step to ADMIN once that step's SLA deadline
-// has passed. The escalation is stored on the request only (escalated +
-// originalRequiredRole); the shared workflow template is never modified, so
-// other requests on the same workflow are unaffected.
+// Escalates each pending step of a request's current stage to ADMIN once that
+// step's SLA has passed. Escalation is stored on the request only
+// (escalatedSteps + escalated + originalRequiredRole); the shared workflow
+// template is never modified, so other requests on the same workflow are
+// unaffected. Parallel steps escalate independently.
 export async function checkAndEscalateRequests(): Promise<number> {
-  const activeRequests = await Request.find({ status: { $in: ACTIVE_STATUSES }, escalated: { $ne: true } });
+  const activeRequests = await Request.find({ status: { $in: ACTIVE_STATUSES } });
 
   const workflowIds = [...new Set(activeRequests.map((r) => r.workflowId))];
   const workflows = await Workflow.find({ _id: { $in: workflowIds } }).catch(() => []);
@@ -33,23 +35,25 @@ export async function checkAndEscalateRequests(): Promise<number> {
 }
 
 async function checkAndEscalateIfNeeded(request: RequestDoc, workflow: WorkflowDoc | undefined) {
-  const currentStep = workflow?.steps[request.currentStep];
-  if (!currentStep) return false;
-  if (!currentStep.slaHours || currentStep.slaHours <= 0) return false;
-  if (currentStep.requiredRole === 'ADMIN') return false; // nowhere higher to escalate to
+  if (!workflow) return false;
 
-  const stepStartTime = request.stepStartTimes.get(String(request.currentStep)) ?? request.createdAt;
-  const hoursElapsed = (Date.now() - new Date(stepStartTime).getTime()) / HOUR_MS;
+  const now = Date.now();
+  const breached = pendingSteps(request, workflow).filter((i) => {
+    const step = workflow.steps[i]!;
+    if (!step.slaHours || step.slaHours <= 0) return false;
+    // Already escalated, or nowhere higher to escalate to.
+    if (effectiveRequiredRole(request, workflow, i) === 'ADMIN') return false;
+    const startedAt = request.stepStartTimes.get(String(i)) ?? request.createdAt;
+    return (now - new Date(startedAt).getTime()) / HOUR_MS > step.slaHours;
+  });
+  if (breached.length === 0) return false;
 
-  if (hoursElapsed > currentStep.slaHours) {
-    request.escalated = true;
-    request.originalRequiredRole = currentStep.requiredRole;
-    await request.save();
-    console.log(`Request ${request.id} escalated to ADMIN due to SLA breach`);
-    return true;
-  }
-
-  return false;
+  request.escalatedSteps = [...request.escalatedSteps, ...breached];
+  request.escalated = true;
+  request.originalRequiredRole = workflow.steps[breached[0]!]!.requiredRole;
+  await request.save();
+  console.log(`Request ${request.id}: steps ${breached.join(', ')} escalated to ADMIN after missing their SLA`);
+  return true;
 }
 
 export function startScheduler() {

@@ -11,9 +11,14 @@ export interface HashInput {
   comment?: string | null;
   timestamp: string;
   previousHash: string;
+  /** Delegator id when a delegate acted. Only appended when present, so
+   *  entries recorded before delegation existed still verify. */
+  onBehalfOf?: string | null;
 }
 
-export function computeHash({ stepIndex, action, actedBy, comment, timestamp, previousHash }: HashInput): string {
-  const data = [stepIndex, action, actedBy, comment || '', timestamp, previousHash].join('|');
+export function computeHash({ stepIndex, action, actedBy, comment, timestamp, previousHash, onBehalfOf }: HashInput): string {
+  const parts: (string | number)[] = [stepIndex, action, actedBy, comment || '', timestamp, previousHash];
+  if (onBehalfOf) parts.push(`onBehalfOf:${onBehalfOf}`);
+  const data = parts.join('|');
   return crypto.createHash('sha256').update(data, 'utf8').digest('hex');
 }

@@ -10,6 +10,7 @@ import { authRoutes } from './routes/auth.routes';
 import { workflowRoutes } from './routes/workflow.routes';
 import { requestRoutes } from './routes/request.routes';
 import { adminRoutes } from './routes/admin.routes';
+import { delegationRoutes } from './routes/delegation.routes';
 import { checkAndEscalateRequests } from './services/slaEscalation.service';
 
 const app = express();
@@ -48,6 +49,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/workflows', workflowRoutes);
 app.use('/api/requests', requestRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/delegations', delegationRoutes);
 
 // Unauthenticated-but-secret-gated hook for Vercel Cron (which can only send
 // scheduled GET requests, not a user's JWT). Set CRON_SECRET; the schedule

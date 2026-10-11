@@ -37,3 +37,10 @@ export class ConflictException extends HttpError {
     super(409, 'Conflict', message);
   }
 }
+
+/** 400 with the flat { field: message } body that schema validation uses. */
+export class ValidationException extends HttpError {
+  constructor(readonly errors: Record<string, string>) {
+    super(400, 'Bad Request', Object.values(errors)[0] ?? 'Invalid input');
+  }
+}

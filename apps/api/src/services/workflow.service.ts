@@ -1,21 +1,25 @@
-import { ACTIVE_STATUSES, type CreateWorkflowInput } from '@proofloop/shared';
+import { ACTIVE_STATUSES, normalizeStages, type CreateWorkflowInput } from '@proofloop/shared';
 import { Workflow } from '../models/Workflow';
 import { Request } from '../models/Request';
 import type { UserDoc } from '../models/User';
 import { AccessDeniedException, ConflictException, ResourceNotFoundException } from '../utils/errors';
 
-export async function createWorkflow(user: UserDoc, { name, description, steps }: CreateWorkflowInput) {
+export async function createWorkflow(user: UserDoc, { name, description, fields, steps }: CreateWorkflowInput) {
   const workflow = await Workflow.create({
     name,
     description,
     createdBy: user.id,
-    // Step order is the array order; stepIndex is normalised so it can't drift.
-    steps: steps.map((s, i) => ({
+    fields: fields.map((f) => ({ ...f, options: f.type === 'select' ? f.options : undefined })),
+    // Stages are renumbered 0..n-1 and steps ordered by stage; stepIndex is the
+    // final position, so client-supplied indexes can't drift.
+    steps: normalizeStages(steps).map((s, i) => ({
       stepIndex: i,
       stepName: s.stepName,
       requiredRole: s.requiredRole,
       requiredApprovals: s.requiredApprovals ?? 1,
       slaHours: s.slaHours ?? null,
+      stage: s.stage,
+      condition: s.condition ?? null,
     })),
   });
   return workflow.toJSON();

@@ -1,11 +1,14 @@
 import { Schema, model, type HydratedDocument } from 'mongoose';
-import type { ActionType, RequestStatus, Role } from '@proofloop/shared';
+import type { ActionType, FieldValue, RequestStatus, Role } from '@proofloop/shared';
 
 export interface IRequestAction {
   stepIndex: number;
   action: ActionType;
   actedBy: string;
   actedByName: string;
+  /** The delegator, when a delegate acted on their behalf. */
+  onBehalfOf?: string | null;
+  onBehalfOfName?: string | null;
   comment?: string | null;
   timestamp: Date;
   previousHash?: string;
@@ -22,6 +25,12 @@ export interface IRequest {
   currentStep: number;
   status: RequestStatus;
   history: IRequestAction[];
+  /** Values for the workflow's fields, validated at creation. */
+  fields: Record<string, FieldValue>;
+  /** Steps whose condition didn't match the fields; fixed at creation. */
+  skippedSteps: number[];
+  /** Steps rerouted to ADMIN after missing their SLA. */
+  escalatedSteps: number[];
   createdAt: Date;
   updatedAt: Date;
   /** step index → ids of users who approved that step */
@@ -39,6 +48,8 @@ const requestActionSchema = new Schema<IRequestAction>(
     action: { type: String, enum: ['APPROVED', 'REJECTED'], required: true },
     actedBy: { type: String, required: true },
     actedByName: { type: String, required: true },
+    onBehalfOf: { type: String },
+    onBehalfOfName: { type: String },
     comment: { type: String },
     timestamp: { type: Date, required: true },
     previousHash: { type: String },
@@ -58,6 +69,9 @@ const requestSchema = new Schema<IRequest>(
     currentStep: { type: Number, default: 0 },
     status: { type: String, enum: ['PENDING', 'IN_REVIEW', 'APPROVED', 'REJECTED'], required: true },
     history: { type: [requestActionSchema], default: [] },
+    fields: { type: Schema.Types.Mixed, default: () => ({}) },
+    skippedSteps: { type: [Number], default: [] },
+    escalatedSteps: { type: [Number], default: [] },
     updatedAt: { type: Date, default: Date.now },
     stepApprovals: { type: Map, of: [String], default: {} },
     stepStartTimes: { type: Map, of: Date, default: {} },

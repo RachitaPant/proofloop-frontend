@@ -28,9 +28,9 @@ requestRoutes.get('/:id/verify', async (req, res) => {
 });
 
 requestRoutes.post('/:id/approve', validateBody(RequestActionInput), async (req: Request<{ id: string }>, res) => {
-  res.json(await requestService.approveRequest(currentUser(req), req.params.id, req.body.comment));
+  res.json(await requestService.approveRequest(currentUser(req), req.params.id, req.body.comment, req.body.stepIndex));
 });
 
 requestRoutes.post('/:id/reject', validateBody(RequestActionInput), async (req: Request<{ id: string }>, res) => {
-  res.json(await requestService.rejectRequest(currentUser(req), req.params.id, req.body.comment));
+  res.json(await requestService.rejectRequest(currentUser(req), req.params.id, req.body.comment, req.body.stepIndex));
 });
