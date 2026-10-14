@@ -1,5 +1,3 @@
-import Anthropic from '@anthropic-ai/sdk';
-import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
 import {
   CreateWorkflowInput,
@@ -9,7 +7,7 @@ import {
   type CreateWorkflowPayload,
   type FieldType,
 } from '@proofloop/shared';
-import { AI_MODEL, getAiClient, isAiEnabled } from '../config/anthropic';
+import { AI_MODEL, LlmError, getLlmClient, isAiEnabled, type LlmReply } from '../config/llm';
 import { ApproverGroup } from '../models/ApproverGroup';
 import type { UserDoc } from '../models/User';
 import { ServiceUnavailableException, UnprocessableException } from '../utils/errors';
@@ -18,7 +16,7 @@ import { reserveAiRequest } from './aiUsage.service';
 // ---------------------------------------------------------------------------
 // What the model returns. Deliberately simpler than the real workflow schema:
 // plain strings and flat fields keep the generated JSON schema small and easy
-// for the model to fill in. The conversion below maps it onto the real
+// for even a small free model to fill in. The conversion below maps it onto the real
 // CreateWorkflowInput, and that schema, not the model, is the authority on
 // what's valid.
 // ---------------------------------------------------------------------------
@@ -142,68 +140,87 @@ function describeIssues(error: z.ZodError): string {
 
 export { isAiEnabled };
 
+const DRAFT_JSON_SCHEMA = (() => {
+  const { $schema: _omit, ...schema } = z.toJSONSchema(ModelDraft) as Record<string, unknown>;
+  return schema;
+})();
+
+/** Strips a code fence a chatty model may wrap around its JSON. */
+function parseJsonReply(text: string): unknown {
+  const body = text.trim().replace(/^```(?:json)?s*/i, '').replace(/```$/, '').trim();
+  return JSON.parse(body);
+}
+
+type Attempt = { ok: true; payload: CreateWorkflowPayload; notes: string[] } | { ok: false; problem: string };
+
+/** Turns a raw reply into a validated workflow payload, or says what was wrong with it. */
+function interpret(reply: LlmReply, validGroupIds: Set<string>): Attempt {
+  let raw: unknown;
+  try {
+    raw = parseJsonReply(reply.text);
+  } catch {
+    return { ok: false, problem: 'it was not valid JSON' };
+  }
+  const shape = ModelDraft.safeParse(raw);
+  if (!shape.success) return { ok: false, problem: `it did not match the schema (${describeIssues(shape.error)})` };
+
+  const payload = toWorkflowPayload(shape.data, validGroupIds);
+  const checked = CreateWorkflowInput.safeParse(payload);
+  if (!checked.success) return { ok: false, problem: describeIssues(checked.error) };
+
+  return { ok: true, payload, notes: shape.data.notes.map((n) => n.trim()).filter(Boolean).slice(0, 10) };
+}
+
 export async function draftWorkflow(user: UserDoc, prompt: string): Promise<AiWorkflowDraft> {
   if (!isAiEnabled()) throw new ServiceUnavailableException('AI drafting is not enabled on this server');
 
   const groups = await ApproverGroup.find().sort({ name: 1 }).limit(50);
   const validGroupIds = new Set(groups.map((g) => g.id as string));
   const groupList = groups.map((g) => ({ id: g.id as string, name: g.name, description: g.description ?? '' }));
+  const userMessage =
+    `<approver_groups>
+${JSON.stringify(groupList)}
+</approver_groups>
+
+` +
+    `<workflow_description>
+${prompt}
+</workflow_description>`;
 
   const reservation = await reserveAiRequest(user.id);
   const model = AI_MODEL();
+  const llm = getLlmClient();
+  const base = { system: SYSTEM_PROMPT, user: userMessage, schema: DRAFT_JSON_SCHEMA };
 
-  let response;
-  try {
-    response = await getAiClient().messages.parse({
-      model,
-      max_tokens: 16000,
-      system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: 'user',
-          content:
-            `<approver_groups>\n${JSON.stringify(groupList)}\n</approver_groups>\n\n` +
-            `<workflow_description>\n${prompt}\n</workflow_description>`,
-        },
-      ],
-      // Drafting a small structured document: low effort keeps latency and cost down.
-      output_config: { effort: 'low', format: zodOutputFormat(ModelDraft) },
-    });
-  } catch (err) {
-    await reservation.refund();
-    // Details go to the log only; callers get a generic message.
-    if (err instanceof Anthropic.APIError) {
-      console.error(`AI draft failed (${err.status ?? 'network'}): ${err.message}`);
-    } else {
-      console.error('AI draft failed:', err);
+  const ask = async (repair?: { reply: string; problem: string }) => {
+    try {
+      const reply = await llm.complete({ ...base, repair });
+      console.log(
+        `AI draft by ${user.id}: model=${model} in=${reply.usage?.prompt_tokens ?? '?'} out=${reply.usage?.completion_tokens ?? '?'}${repair ? ' (repair)' : ''}`,
+      );
+      return reply;
+    } catch (err) {
+      await reservation.refund();
+      // Details go to the log only; callers get a generic message.
+      console.error(`AI draft failed: ${err instanceof LlmError ? err.message : String(err)}`);
+      throw new ServiceUnavailableException('The AI assistant is unavailable right now. Try again in a moment.');
     }
-    throw new ServiceUnavailableException('The AI assistant is unavailable right now. Try again in a moment.');
-  }
-
-  console.log(
-    `AI draft by ${user.id}: model=${model} in=${response.usage.input_tokens} out=${response.usage.output_tokens}`,
-  );
-
-  if (response.stop_reason === 'refusal') {
-    throw new UnprocessableException('The AI declined to draft this workflow. Try rephrasing your description.');
-  }
-  if (response.stop_reason === 'max_tokens' || !response.parsed_output) {
-    throw new UnprocessableException('The AI could not produce a complete draft. Try a shorter description.');
-  }
-
-  const payload = toWorkflowPayload(response.parsed_output, validGroupIds);
-  const checked = CreateWorkflowInput.safeParse(payload);
-  if (!checked.success) {
-    console.warn(`AI draft failed validation: ${describeIssues(checked.error)}`);
-    throw new UnprocessableException(
-      `The AI's draft wasn't valid (${describeIssues(checked.error)}). Try rephrasing your description.`,
-    );
-  }
-
-  return {
-    workflow: payload,
-    notes: response.parsed_output.notes.map((n) => n.trim()).filter(Boolean).slice(0, 10),
-    model,
-    remainingThisHour: reservation.remainingThisHour,
   };
+
+  let reply = await ask();
+  let result = interpret(reply, validGroupIds);
+
+  // Smaller models slip now and then (bad JSON, a condition on a field that
+  // doesn't exist). One repair attempt, telling the model what was wrong.
+  if (!result.ok) {
+    console.warn(`AI draft needed repair: ${result.problem}`);
+    reply = await ask({ reply: reply.text, problem: result.problem });
+    result = interpret(reply, validGroupIds);
+  }
+
+  if (!result.ok) {
+    throw new UnprocessableException(`The AI's draft wasn't valid (${result.problem}). Try rephrasing your description.`);
+  }
+
+  return { workflow: result.payload, notes: result.notes, model, remainingThisHour: reservation.remainingThisHour };
 }

@@ -63,25 +63,34 @@ to `main` and on every pull request.
 
 ## AI features (optional)
 
-Set `ANTHROPIC_API_KEY` on the API to enable them; without it the AI controls
-are hidden and the endpoints return 503.
+Set `AI_API_KEY` on the API to enable them; without it the AI controls are
+hidden and the endpoints return 503. They work with **any OpenAI-compatible
+chat API**, and the default setup uses [Groq](https://console.groq.com)'s free
+tier with `openai/gpt-oss-120b` (no vendor SDK: one `fetch`, so switching to
+OpenRouter, Gemini's compatibility endpoint, or a local Ollama is three env
+vars: `AI_API_KEY`, `AI_BASE_URL`, `AI_MODEL`).
 
 - **AI workflow drafting:** describe a process in plain English in the workflow
   builder ("manager, then legal and security together, CFO above 100k") and the
   model drafts the fields, steps, conditions, parallel stages and approver
-  groups. The model returns schema-constrained JSON (Claude structured outputs),
-  which the server maps onto the real workflow schema and **re-validates**: an
-  invalid draft is rejected, never passed on. The draft only fills in the
-  form; a human reviews it (with the model's stated assumptions) and creates
-  the workflow through the normal, permission-checked endpoint.
-- **Safety and cost:** the user's description is fenced as data in the prompt
-  and the model has no tools or write access, so injected instructions can
-  only change the draft a human then reviews. Spend is capped per user per hour
-  and across all users per day (counters live in MongoDB, so the limits hold
-  across serverless instances); failed calls are refunded; provider errors are
-  logged, never returned.
-- **Model:** `claude-opus-5-5` by default; set `ANTHROPIC_MODEL` (e.g.
-  `claude-sonnet-5-5`) to trade quality for cost.
+  groups. It returns schema-constrained JSON (strict `json_schema` where the
+  provider supports it, plain JSON mode otherwise, detected automatically); the
+  server maps it onto the real workflow schema and **re-validates**. Small free
+  models slip now and then, so an unusable reply gets one repair attempt that
+  tells the model what was wrong, and after that the draft is rejected, never
+  passed on. The draft only fills in the form; a human reviews it (with the
+  model's stated assumptions) and creates the workflow through the normal,
+  permission-checked endpoint.
+- **Safety and limits:** the user's description is fenced as data in the prompt
+  and the model has no tools or write access, so injected instructions can only
+  change a draft a human then reviews. Group members are never sent to the
+  model. Usage is capped per user per hour and across all users per day
+  (counters live in MongoDB, so the limits hold across serverless instances),
+  which also keeps you inside a free tier's quota; failed calls are refunded;
+  provider errors are logged, never returned.
+- **Privacy:** workflow descriptions and approver-group names are sent to the
+  provider. Free tiers of some providers (notably Google Gemini's) may use
+  prompts to improve their products, so don't put confidential details in them.
 
 ## How approvals work
 

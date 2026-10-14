@@ -85,7 +85,7 @@ The routing rules are pure functions in `packages/shared/src/engine.ts`
 - `GET /api/admin/users`: list users (password hashes are never serialized)
 - `PATCH /api/admin/users/:id/role`: change a user's role (not your own)
 - `GET|POST /api/delegations`, `DELETE /api/delegations/:id`: approval delegation
-- `GET /api/ai/status`, `POST /api/ai/workflow-draft`: AI drafting (returns a draft, saves nothing; limits via `AI_REQUESTS_PER_HOUR`, `AI_DAILY_CAP`)
+- `GET /api/ai/status`, `POST /api/ai/workflow-draft`: AI drafting (returns a draft, saves nothing; any OpenAI-compatible provider via `AI_API_KEY` / `AI_BASE_URL` / `AI_MODEL`; limits via `AI_REQUESTS_PER_HOUR`, `AI_DAILY_CAP`)
 - `GET|POST /api/groups`, `PUT|DELETE /api/groups/:id`: approver groups
 - `GET /api/auth/me`, `POST /api/auth/refresh`, `POST /api/auth/logout`: cookie sessions
 
