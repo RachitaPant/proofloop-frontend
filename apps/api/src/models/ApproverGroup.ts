@@ -8,6 +8,7 @@ export interface IApproverGroup {
   description?: string | null;
   memberIds: string[];
   createdBy: string;
+  orgId: string;
   createdAt: Date;
 }
 
@@ -17,6 +18,7 @@ const approverGroupSchema = new Schema<IApproverGroup>(
     description: { type: String },
     memberIds: { type: [String], default: [] },
     createdBy: { type: String, required: true },
+    orgId: { type: String, index: true },
   },
   {
     collection: 'approver_groups',
@@ -32,7 +34,7 @@ const approverGroupSchema = new Schema<IApproverGroup>(
   },
 );
 
-approverGroupSchema.index({ name: 1 }, { unique: true, collation: { locale: 'en', strength: 2 } });
+approverGroupSchema.index({ orgId: 1, name: 1 }, { unique: true, collation: { locale: 'en', strength: 2 } });
 
 export type ApproverGroupDoc = HydratedDocument<IApproverGroup>;
 export const ApproverGroup = model<IApproverGroup>('ApproverGroup', approverGroupSchema);

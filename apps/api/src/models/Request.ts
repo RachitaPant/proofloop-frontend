@@ -24,6 +24,7 @@ export interface IRequest {
   workflowName: string;
   createdBy: string;
   createdByName: string;
+  orgId: string;
   currentStep: number;
   status: RequestStatus;
   history: IRequestAction[];
@@ -69,6 +70,7 @@ const requestSchema = new Schema<IRequest>(
     workflowName: { type: String, required: true },
     createdBy: { type: String, required: true },
     createdByName: { type: String, required: true },
+    orgId: { type: String, index: true },
     currentStep: { type: Number, default: 0 },
     status: { type: String, enum: ['PENDING', 'IN_REVIEW', 'APPROVED', 'REJECTED'], required: true },
     history: { type: [requestActionSchema], default: [] },

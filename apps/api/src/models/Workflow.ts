@@ -28,6 +28,7 @@ export interface IWorkflow {
   name: string;
   description?: string | null;
   createdBy: string;
+  orgId: string;
   fields: IWorkflowField[];
   steps: IWorkflowStep[];
   createdAt: Date;
@@ -66,6 +67,7 @@ const workflowSchema = new Schema<IWorkflow>(
     name: { type: String, required: true },
     description: { type: String },
     createdBy: { type: String, required: true },
+    orgId: { type: String, index: true },
     fields: { type: [workflowFieldSchema], default: [] },
     steps: { type: [workflowStepSchema], required: true },
   },

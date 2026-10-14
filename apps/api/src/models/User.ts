@@ -6,6 +6,8 @@ export interface IUser {
   email: string;
   passwordHash: string;
   role: Role;
+  /** The organisation this user belongs to (and their role applies in). */
+  orgId: string;
   createdAt: Date;
 }
 
@@ -15,6 +17,7 @@ const userSchema = new Schema<IUser>(
     email: { type: String, required: true, unique: true },
     passwordHash: { type: String, required: true },
     role: { type: String, enum: ['USER', 'REVIEWER', 'ADMIN'], required: true },
+    orgId: { type: String, index: true },
   },
   {
     collection: 'users',

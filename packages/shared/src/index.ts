@@ -36,6 +36,10 @@ export const RegisterInput = z.object({
   name: requiredText('Name is required').max(100, 'Name is too long'),
   email: z.email('Email must be valid'),
   password: z.string({ error: 'Password is required' }).min(8, 'Password must be at least 8 characters').max(200),
+  /** Join an existing organisation through an invite link... */
+  inviteToken: z.string().min(20).max(200).nullish(),
+  /** ...or name the new organisation this sign-up creates. */
+  organizationName: z.string().trim().max(80, 'Organisation name is too long').nullish(),
 });
 export type RegisterInput = z.infer<typeof RegisterInput>;
 
@@ -201,6 +205,19 @@ export const AiWorkflowDraftInput = z.object({
 });
 export type AiWorkflowDraftInput = z.infer<typeof AiWorkflowDraftInput>;
 
+export const CreateInviteInput = z.object({
+  role: RoleSchema.default('USER'),
+  /** Optional: only this address may use the invite. */
+  email: z.email('Email must be valid').nullish(),
+});
+export type CreateInviteInput = z.infer<typeof CreateInviteInput>;
+export type CreateInvitePayload = z.input<typeof CreateInviteInput>;
+
+export const UpdateOrganizationInput = z.object({
+  name: requiredText('Organisation name is required').max(80, 'Organisation name is too long'),
+});
+export type UpdateOrganizationInput = z.infer<typeof UpdateOrganizationInput>;
+
 export const UpdateRoleInput = z.object({
   role: RoleSchema,
 });
@@ -214,8 +231,39 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  /** The user's role inside their organisation. */
   role: Role;
+  orgId?: string;
   createdAt?: string;
+}
+
+export interface Organization {
+  id: string;
+  name: string;
+  memberCount: number;
+  createdAt: string;
+}
+
+export interface Invite {
+  id: string;
+  role: Role;
+  email?: string | null;
+  createdByName: string;
+  expiresAt: string;
+  createdAt: string;
+}
+
+/** Returned once, when an invite is created: the only time the link exists. */
+export interface CreatedInvite extends Invite {
+  token: string;
+}
+
+/** What the join page shows before sign-up. */
+export interface InvitePreview {
+  valid: boolean;
+  orgName?: string;
+  role?: Role;
+  email?: string | null;
 }
 
 export interface AuthResponse {
