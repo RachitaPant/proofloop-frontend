@@ -186,6 +186,17 @@ export const ApproverGroupInput = z.object({
 export type ApproverGroupInput = z.infer<typeof ApproverGroupInput>;
 export type ApproverGroupPayload = z.input<typeof ApproverGroupInput>;
 
+// AI-assisted workflow drafting: describe a process in plain English, get a
+// draft workflow to review. The draft is never saved by the AI endpoint.
+export const AiWorkflowDraftInput = z.object({
+  prompt: z
+    .string({ error: 'Describe the workflow you want' })
+    .trim()
+    .min(10, 'Describe the workflow in a bit more detail')
+    .max(2000, 'Keep the description under 2000 characters'),
+});
+export type AiWorkflowDraftInput = z.infer<typeof AiWorkflowDraftInput>;
+
 export const UpdateRoleInput = z.object({
   role: RoleSchema,
 });
@@ -304,6 +315,21 @@ export interface ApproverGroup {
   /** Resolved for display. */
   members: { id: string; name: string; email: string }[];
   createdAt: string;
+}
+
+/** What the AI produced, ready to load into the workflow builder. */
+export interface AiWorkflowDraft {
+  /** Same shape the builder submits; validated against CreateWorkflowInput. */
+  workflow: CreateWorkflowPayload;
+  /** Assumptions the model made, for the human to check. */
+  notes: string[];
+  model: string;
+  /** Requests left in this hour's allowance. */
+  remainingThisHour: number;
+}
+
+export interface AiStatus {
+  enabled: boolean;
 }
 
 export interface Delegation {

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ApproverGroupPayload, CreateDelegationInput, CreateRequestPayload, CreateWorkflowPayload } from '@proofloop/shared';
 import type { Role, User } from '@/types';
-import { adminApi, delegationApi, groupApi, requestApi, workflowApi } from '@/lib/api';
+import { adminApi, aiApi, delegationApi, groupApi, requestApi, workflowApi } from '@/lib/api';
 
 // Every server-state read and write in the app goes through these hooks, so
 // cache keys and invalidation rules live in one place.
@@ -203,5 +203,19 @@ export function useDeleteGroup() {
   return useMutation({
     mutationFn: async (id: string) => groupApi.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.groups.all }),
+  });
+}
+
+export function useAiStatus() {
+  return useQuery({
+    queryKey: ['ai', 'status'] as const,
+    queryFn: async () => (await aiApi.status()).data,
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useAiWorkflowDraft() {
+  return useMutation({
+    mutationFn: async (prompt: string) => (await aiApi.draftWorkflow(prompt)).data,
   });
 }

@@ -61,6 +61,28 @@ to `main` and on every pull request.
 - **API clients** (Postman, scripts, agents) send `Authorization: Bearer <token>`
   using the `token` returned by `/api/auth/login`.
 
+## AI features (optional)
+
+Set `ANTHROPIC_API_KEY` on the API to enable them; without it the AI controls
+are hidden and the endpoints return 503.
+
+- **AI workflow drafting:** describe a process in plain English in the workflow
+  builder ("manager, then legal and security together, CFO above 100k") and the
+  model drafts the fields, steps, conditions, parallel stages and approver
+  groups. The model returns schema-constrained JSON (Claude structured outputs),
+  which the server maps onto the real workflow schema and **re-validates**: an
+  invalid draft is rejected, never passed on. The draft only fills in the
+  form; a human reviews it (with the model's stated assumptions) and creates
+  the workflow through the normal, permission-checked endpoint.
+- **Safety and cost:** the user's description is fenced as data in the prompt
+  and the model has no tools or write access, so injected instructions can
+  only change the draft a human then reviews. Spend is capped per user per hour
+  and across all users per day (counters live in MongoDB, so the limits hold
+  across serverless instances); failed calls are refunded; provider errors are
+  logged, never returned.
+- **Model:** `claude-opus-5-5` by default; set `ANTHROPIC_MODEL` (e.g.
+  `claude-sonnet-5-5`) to trade quality for cost.
+
 ## How approvals work
 
 - A workflow defines **request fields** (number, text, choice) and **steps**.

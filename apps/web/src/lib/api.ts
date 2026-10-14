@@ -1,5 +1,7 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
 import type {
+  AiStatus,
+  AiWorkflowDraft,
   ApproverGroup,
   ApproverGroupPayload,
   CreateDelegationInput,
@@ -112,6 +114,12 @@ export const groupApi = {
   create: (data: ApproverGroupPayload) => api.post<ApproverGroup>('/groups', data),
   update: (id: string, data: ApproverGroupPayload) => api.put<ApproverGroup>(`/groups/${id}`, data),
   delete: (id: string) => api.delete(`/groups/${id}`),
+};
+
+// AI assistance (drafts only; nothing is saved by these calls)
+export const aiApi = {
+  status: () => api.get<AiStatus>('/ai/status'),
+  draftWorkflow: (prompt: string) => api.post<AiWorkflowDraft>('/ai/workflow-draft', { prompt }),
 };
 
 // Admin

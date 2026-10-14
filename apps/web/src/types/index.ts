@@ -18,5 +18,6 @@ export {
   type ChainVerification,
   type Delegation,
   type ApproverGroup,
+  type AiWorkflowDraft,
   type Analytics,
 } from '@proofloop/shared';

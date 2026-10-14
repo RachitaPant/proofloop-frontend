@@ -1,14 +1,19 @@
 'use client';
 
 import { useState } from 'react';
-import { GitFork, Plus, Sparkles, Trash2 } from 'lucide-react';
+import { GitFork, Loader2, Plus, Sparkles, Trash2, Wand2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import type { ConditionOperator, CreateWorkflowPayload, FieldType } from '@proofloop/shared';
+import {
+  fieldKeyFromLabel as keyFromLabel,
+  type ConditionOperator,
+  type CreateWorkflowPayload,
+  type FieldType,
+} from '@proofloop/shared';
 import { Role } from '@/types';
 import Button from '@/components/ui/Button';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { getErrorMessage } from '@/lib/errors';
-import { useCreateWorkflow, useGroups } from '@/lib/queries';
+import { useAiStatus, useAiWorkflowDraft, useCreateWorkflow, useGroups } from '@/lib/queries';
 
 // Form state is kept as strings (what inputs hold) and converted to the API
 // shape on submit. The server validates again with the shared Zod schema.
@@ -70,18 +75,6 @@ const emptyStep = (): StepDraft => ({
   rules: [],
 });
 
-/** "Cost centre (EUR)" → "costCentreEur"; unique within the workflow. */
-function keyFromLabel(label: string, taken: Set<string>): string {
-  const words = label.toLowerCase().match(/[a-z0-9]+/g) ?? ['field'];
-  let key = words.map((w, i) => (i === 0 ? w : w[0]!.toUpperCase() + w.slice(1))).join('');
-  if (!/^[a-z]/.test(key)) key = `f${key}`;
-  key = key.slice(0, 40);
-  let unique = key;
-  for (let n = 2; taken.has(unique); n++) unique = `${key}${n}`;
-  taken.add(unique);
-  return unique;
-}
-
 const EXAMPLE: { name: string; description: string; fields: FieldDraft[]; steps: StepDraft[] } = {
   name: 'Purchase approval',
   description: 'Manager sign-off, then legal and security in parallel; the CFO only for large amounts.',
@@ -110,6 +103,20 @@ export default function WorkflowBuilder({ onCreated, onCancel }: { onCreated: ()
   const [steps, setSteps] = useState<StepDraft[]>([emptyStep()]);
   const createWorkflow = useCreateWorkflow();
   const { data: groups = [] } = useGroups();
+  const { data: ai } = useAiStatus();
+  const aiDraft = useAiWorkflowDraft();
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiNotes, setAiNotes] = useState<string[] | null>(null);
+
+  const generate = () =>
+    aiDraft.mutate(aiPrompt, {
+      onSuccess: (result) => {
+        applyDraft(result.workflow);
+        setAiNotes(result.notes);
+        toast.success(`Draft ready (${result.remainingThisHour} left this hour). Review it before creating.`);
+      },
+      onError: (error) => toast.error(getErrorMessage(error, 'Could not generate a draft')),
+    });
 
   // Keys are derived from labels so conditions can reference them.
   const keysFor = (drafts: FieldDraft[]) => {
@@ -134,6 +141,38 @@ export default function WorkflowBuilder({ onCreated, onCancel }: { onCreated: ()
     setSteps((all) =>
       all.map((s, k) => (k === i ? { ...s, rules: s.rules.map((rule, j) => (j === r ? { ...rule, ...patch } : rule)) } : s)),
     );
+
+  // AI draft: fill the form with what the model proposed. The user reviews and
+  // edits it like any other workflow; nothing is saved until they create it.
+  const applyDraft = (wf: CreateWorkflowPayload) => {
+    const stageOfStep = (i: number) => wf.steps[i]?.stage ?? i;
+    setName(wf.name);
+    setDescription(wf.description ?? '');
+    setFields(
+      (wf.fields ?? []).map((f) => ({
+        label: f.label,
+        type: f.type,
+        required: f.required ?? false,
+        optionsText: (f.options ?? []).join(', '),
+      })),
+    );
+    setSteps(
+      wf.steps.map((st, i) => ({
+        stepName: st.stepName,
+        assignee: st.approverGroupId ? `group:${st.approverGroupId}` : `role:${st.requiredRole ?? Role.REVIEWER}`,
+        requiredApprovals: String(st.requiredApprovals ?? 1),
+        slaHours: st.slaHours ? String(st.slaHours) : '',
+        parallelWithPrevious: i > 0 && stageOfStep(i) === stageOfStep(i - 1),
+        conditional: !!st.condition,
+        mode: st.condition?.mode ?? 'all',
+        rules: (st.condition?.rules ?? []).map((r) => ({
+          field: r.field,
+          operator: r.operator,
+          value: Array.isArray(r.value) ? r.value.join(', ') : String(r.value),
+        })),
+      })),
+    );
+  };
 
   const loadExample = () => {
     setName(EXAMPLE.name);
@@ -199,6 +238,46 @@ export default function WorkflowBuilder({ onCreated, onCancel }: { onCreated: ()
 
   return (
     <form onSubmit={submit} className="space-y-6">
+      {ai?.enabled && (
+        <section className="rounded-lg border border-accent-200 bg-accent-50/50 p-4 space-y-3">
+          <div className="flex items-center gap-2 text-sm font-semibold text-accent-700">
+            <Wand2 className="w-4 h-4" />
+            Describe it, let AI draft it
+          </div>
+          <Textarea
+            aria-label="Describe the workflow"
+            rows={3}
+            maxLength={2000}
+            placeholder="e.g. Purchases need manager sign-off, then legal and security at the same time. Anything over 100,000 also needs the CFO."
+            value={aiPrompt}
+            onChange={(e) => setAiPrompt(e.target.value)}
+          />
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs text-navy-500">
+              The AI only fills in the form below. You review and edit it, then create the workflow.
+            </p>
+            <Button type="button" size="sm" onClick={generate} disabled={aiPrompt.trim().length < 10 || aiDraft.isPending}>
+              {aiDraft.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+              {aiDraft.isPending ? 'Drafting…' : 'Generate draft'}
+            </Button>
+          </div>
+          {aiNotes && (
+            <div className="rounded-md border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-700">
+              <div className="font-medium">
+                {aiNotes.length > 0 ? 'Assumptions to check' : 'Draft loaded: check every step before creating'}
+              </div>
+              {aiNotes.length > 0 && (
+                <ul className="mt-1 list-disc pl-5 space-y-0.5">
+                  {aiNotes.map((n, i) => (
+                    <li key={i}>{n}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
       <div className="flex justify-end -mt-2">
         <Button type="button" variant="ghost" size="sm" onClick={loadExample}>
           <Sparkles className="w-3.5 h-3.5" />
