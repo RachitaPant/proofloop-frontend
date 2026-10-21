@@ -109,7 +109,7 @@ export default function RequestDetailPage() {
       </div>
 
       <div className="grid md:grid-cols-3 gap-6">
-        <div className="md:col-span-2 space-y-6">
+        <div className="md:col-span-2 min-w-0 space-y-6">
           <Card>
             <CardHeader>
               <CardTitle>Description</CardTitle>
@@ -242,7 +242,7 @@ export default function RequestDetailPage() {
           )}
         </div>
 
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-6">
           <Card>
             <CardHeader>
               <CardTitle>Details</CardTitle>

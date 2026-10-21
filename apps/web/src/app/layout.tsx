@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter, Sora } from 'next/font/google';
 import './globals.css';
 import Providers from './providers';
@@ -9,6 +9,12 @@ const sora = Sora({ subsets: ['latin'], variable: '--font-sora' });
 export const metadata: Metadata = {
   title: 'ProofLoop - Workflow Approval System',
   description: 'Verifiable workflow system for approvals & handoffs',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({

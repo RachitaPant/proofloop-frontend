@@ -47,7 +47,7 @@ export default function Modal({ open, onClose, title, description, children, siz
           sizeClasses[size],
         )}
       >
-        <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-surface-200 sticky top-0 bg-white rounded-t-xl">
+        <div className="flex items-start justify-between px-4 sm:px-6 pt-5 sm:pt-6 pb-4 border-b border-surface-200 sticky top-0 bg-white rounded-t-xl">
           <div>
             <h2 id="modal-title" className="font-display text-xl font-semibold text-navy-900">
               {title}
@@ -62,7 +62,7 @@ export default function Modal({ open, onClose, title, description, children, siz
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="p-6">{children}</div>
+        <div className="p-4 sm:p-6">{children}</div>
       </div>
     </div>
   );
