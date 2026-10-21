@@ -308,8 +308,8 @@ export default function WorkflowBuilder({ onCreated, onCancel }: { onCreated: ()
           </Button>
         </div>
         {fields.map((field, i) => (
-          <div key={i} className="grid grid-cols-12 gap-2 items-end border border-surface-200 rounded-lg p-3 bg-surface-50">
-            <div className="col-span-5">
+          <div key={i} className="grid grid-cols-1 sm:grid-cols-12 gap-2 sm:items-end border border-surface-200 rounded-lg p-3 bg-surface-50">
+            <div className="sm:col-span-5">
               <Input
                 label="Label"
                 required
@@ -318,27 +318,27 @@ export default function WorkflowBuilder({ onCreated, onCancel }: { onCreated: ()
                 onChange={(e) => updateField(i, { label: e.target.value })}
               />
             </div>
-            <div className="col-span-3">
+            <div className="sm:col-span-3">
               <Select label="Type" value={field.type} onChange={(e) => updateField(i, { type: e.target.value as FieldType })}>
                 <option value="number">Number</option>
                 <option value="text">Text</option>
                 <option value="select">Choice</option>
               </Select>
             </div>
-            <label className="col-span-3 flex items-center gap-2 text-sm text-navy-700 pb-2.5">
+            <label className="sm:col-span-3 flex items-center gap-2 text-sm text-navy-700 sm:pb-2.5">
               <input type="checkbox" checked={field.required} onChange={(e) => updateField(i, { required: e.target.checked })} />
               Required
             </label>
             <button
               type="button"
               aria-label="Remove field"
-              className="col-span-1 pb-2.5 text-navy-400 hover:text-danger-600"
+              className="sm:col-span-1 justify-self-end sm:pb-2.5 text-navy-400 hover:text-danger-600"
               onClick={() => setFields((all) => all.filter((_, k) => k !== i))}
             >
               <Trash2 className="w-4 h-4" />
             </button>
             {field.type === 'select' && (
-              <div className="col-span-12">
+              <div className="sm:col-span-12">
                 <Input
                   label="Choices (comma-separated)"
                   required
@@ -381,7 +381,7 @@ export default function WorkflowBuilder({ onCreated, onCancel }: { onCreated: ()
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Input label="Step name" required value={s.stepName} onChange={(e) => updateStep(i, { stepName: e.target.value })} />
               <Select label="Assigned to" value={s.assignee} onChange={(e) => updateStep(i, { assignee: e.target.value })}>
                 <optgroup label="Anyone with role">
@@ -462,8 +462,8 @@ export default function WorkflowBuilder({ onCreated, onCancel }: { onCreated: ()
                 {s.rules.map((rule, r) => {
                   const type = fieldOptions.find((f) => f.key === rule.field)?.type ?? 'text';
                   return (
-                    <div key={r} className="grid grid-cols-12 gap-2 items-center">
-                      <div className="col-span-4">
+                    <div key={r} className="grid grid-cols-1 sm:grid-cols-12 gap-2 sm:items-center">
+                      <div className="sm:col-span-4">
                         <Select
                           aria-label="Field"
                           value={rule.field}
@@ -479,7 +479,7 @@ export default function WorkflowBuilder({ onCreated, onCancel }: { onCreated: ()
                           ))}
                         </Select>
                       </div>
-                      <div className="col-span-3">
+                      <div className="sm:col-span-3">
                         <Select
                           aria-label="Operator"
                           value={rule.operator}
@@ -492,7 +492,7 @@ export default function WorkflowBuilder({ onCreated, onCancel }: { onCreated: ()
                           ))}
                         </Select>
                       </div>
-                      <div className="col-span-4">
+                      <div className="sm:col-span-4">
                         <Input
                           aria-label="Value"
                           required
@@ -505,7 +505,7 @@ export default function WorkflowBuilder({ onCreated, onCancel }: { onCreated: ()
                       <button
                         type="button"
                         aria-label="Remove rule"
-                        className="col-span-1 text-navy-400 hover:text-danger-600"
+                        className="sm:col-span-1 justify-self-end text-navy-400 hover:text-danger-600"
                         onClick={() =>
                           updateStep(i, { rules: s.rules.filter((_, j) => j !== r), conditional: s.rules.length > 1 })
                         }

@@ -169,6 +169,12 @@
 }
 
 @layer base {
+  /* User-written text (titles, descriptions, comments) can contain long unbroken
+     strings such as URLs; let it wrap rather than widen the whole page. */
+  main {
+    overflow-wrap: anywhere;
+  }
+
   :root {
     --background: 220 45% 99%;
     --foreground: 222 47% 11%;

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import Sidebar from './AppShell/Sidebar';
 import Topbar from './AppShell/Topbar';
+import MobileNav from './AppShell/MobileNav';
 import Spinner from './ui/Spinner';
 import EmptyState from './ui/EmptyState';
 import { ShieldOff } from 'lucide-react';
@@ -43,7 +44,8 @@ export default function ProtectedRoute({ children, requireRole }: ProtectedRoute
       <Sidebar />
       <div className="flex-1 min-w-0">
         <Topbar />
-        <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
+        <MobileNav />
+        <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-24 md:py-8 animate-fade-in">
           {requireRole && user.role !== requireRole ? (
             <EmptyState
               icon={ShieldOff}
