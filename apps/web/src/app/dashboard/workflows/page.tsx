@@ -22,7 +22,7 @@ export default function WorkflowsPage() {
   return (
     <>
       <div className="space-y-6">
-        <div className="flex justify-between items-center">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-3xl font-display font-bold text-navy-900">Workflows</h1>
             <p className="text-navy-500 mt-1">Manage approval workflows</p>
