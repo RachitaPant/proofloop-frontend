@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, test, vi } from 'vitest';
 
 type Fetch = typeof fetch;
 const schema = { type: 'object', properties: { a: { type: 'string' } }, required: ['a'], additionalProperties: false };
-const request = { system: 'You draft workflows.', user: 'make one', schema };
+const request = { system: 'You draft workflows.', user: 'make one', schema, schemaName: 'review_output' };
 
 const reply = (content: string | null, extra: Record<string, unknown> = {}, status = 200) =>
   new Response(
@@ -54,7 +54,7 @@ describe('OpenAI-compatible client', () => {
     assert.deepEqual(body.messages.map((m: { role: string }) => m.role), ['system', 'user']);
     assert.deepEqual(body.response_format, {
       type: 'json_schema',
-      json_schema: { name: 'workflow_draft', strict: true, schema },
+      json_schema: { name: 'review_output', strict: true, schema },
     });
     assert.equal(body.reasoning_effort, undefined);
   });

@@ -190,7 +190,7 @@ ${prompt}
   const reservation = await reserveAiRequest(user.id);
   const model = AI_MODEL();
   const llm = getLlmClient();
-  const base = { system: SYSTEM_PROMPT, user: userMessage, schema: DRAFT_JSON_SCHEMA };
+  const base = { system: SYSTEM_PROMPT, user: userMessage, schema: DRAFT_JSON_SCHEMA, schemaName: 'workflow_draft' };
 
   const ask = async (repair?: { reply: string; problem: string }) => {
     try {

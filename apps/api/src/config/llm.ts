@@ -18,6 +18,8 @@ export interface LlmRequest {
   user: string;
   /** JSON Schema the reply should follow (used when the provider supports it). */
   schema: Record<string, unknown>;
+  /** Name for the schema in the provider request (snake_case); defaults to a generic one. */
+  schemaName?: string;
   /** A previous bad reply to repair, with what was wrong with it. */
   repair?: { reply: string; problem: string };
 }
@@ -56,25 +58,23 @@ export function isAiEnabled(): boolean {
 // this instance stops asking for it (plain JSON mode + the schema in the prompt).
 let schemaUnsupported = false;
 
-const SCHEMA_NAME = 'workflow_draft';
-
 class HttpLlmClient implements LlmClient {
-  async complete({ system, user, schema, repair }: LlmRequest): Promise<LlmReply> {
+  async complete(request: LlmRequest): Promise<LlmReply> {
     const useSchema = process.env.AI_JSON_MODE !== 'object' && !schemaUnsupported;
     try {
-      return await this.call({ system, user, schema, repair }, useSchema);
+      return await this.call(request, useSchema);
     } catch (err) {
       // 400 usually means "this model can't do json_schema": retry once without it.
       if (useSchema && err instanceof LlmError && err.status === 400) {
         console.warn('AI provider rejected json_schema output; falling back to JSON mode');
         schemaUnsupported = true;
-        return this.call({ system, user, schema, repair }, false);
+        return this.call(request, false);
       }
       throw err;
     }
   }
 
-  private async call({ system, user, schema, repair }: LlmRequest, useSchema: boolean): Promise<LlmReply> {
+  private async call({ system, user, schema, schemaName, repair }: LlmRequest, useSchema: boolean): Promise<LlmReply> {
     const messages: { role: string; content: string }[] = [
       {
         role: 'system',
@@ -98,7 +98,7 @@ class HttpLlmClient implements LlmClient {
       temperature: 0.2,
       max_tokens: 6000,
       response_format: useSchema
-        ? { type: 'json_schema', json_schema: { name: SCHEMA_NAME, strict: true, schema } }
+        ? { type: 'json_schema', json_schema: { name: schemaName ?? 'structured_output', strict: true, schema } }
         : { type: 'json_object' },
     };
     if (process.env.AI_REASONING_EFFORT) body.reasoning_effort = process.env.AI_REASONING_EFFORT;

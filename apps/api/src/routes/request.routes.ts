@@ -3,6 +3,7 @@ import { CreateRequestInput, RequestActionInput } from '@proofloop/shared';
 import { validateBody } from '../middleware/validate';
 import { currentUser, requireAuth } from '../middleware/auth';
 import * as requestService from '../services/request.service';
+import * as aiReviewService from '../services/aiReview.service';
 
 export const requestRoutes = Router();
 requestRoutes.use(requireAuth);
@@ -25,6 +26,12 @@ requestRoutes.get('/:id', async (req, res) => {
 
 requestRoutes.get('/:id/verify', async (req, res) => {
   res.json(await requestService.verifyRequestChain(currentUser(req), req.params.id));
+});
+
+// Advice only: appends the AI's recommendation to the audit trail. It never
+// approves, rejects or reroutes anything.
+requestRoutes.post('/:id/ai-review', async (req: Request<{ id: string }>, res) => {
+  res.json(await aiReviewService.reviewRequest(currentUser(req), req.params.id));
 });
 
 requestRoutes.post('/:id/approve', validateBody(RequestActionInput), async (req: Request<{ id: string }>, res) => {

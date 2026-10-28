@@ -1,5 +1,7 @@
+import mongoose from 'mongoose';
 import {
   ACTIVE_STATUSES,
+  AI_RECOMMENDATION_ACTION,
   nextActiveStage,
   planSkippedSteps,
   stageOf,
@@ -7,6 +9,7 @@ import {
   validateFieldValues,
   type ActionableStep,
   type ActionType,
+  type AiRecommendation,
   type ChainVerification,
   type CreateRequestInput,
   type Role,
@@ -16,8 +19,8 @@ import { Workflow, type WorkflowDoc } from '../models/Workflow';
 import type { UserDoc } from '../models/User';
 import type { DelegationDoc } from '../models/Delegation';
 import { ApproverGroup, type ApproverGroupDoc } from '../models/ApproverGroup';
-import { BadRequestException, ResourceNotFoundException, ValidationException } from '../utils/errors';
-import { GENESIS_HASH, computeHash } from '../utils/hash';
+import { BadRequestException, ConflictException, ResourceNotFoundException, ValidationException } from '../utils/errors';
+import { GENESIS_HASH, aiDigest, computeHash } from '../utils/hash';
 import { activeDelegationsTo } from './delegation.service';
 
 // ---------------------------------------------------------------------------
@@ -382,6 +385,8 @@ export async function verifyRequestChain(user: UserDoc, id: string): Promise<Cha
       timestamp: new Date(entry.timestamp).toISOString(),
       previousHash: entry.previousHash,
       onBehalfOf: entry.onBehalfOf,
+      // Any entry carrying an AI block is covered, so an `ai` block can't be added to or stripped from one.
+      aiDigest: entry.ai ? aiDigest(entry.ai) : null,
     });
     if (recomputed !== entry.currentHash) return fail('Entry contents do not match its hash');
 
@@ -389,6 +394,64 @@ export async function verifyRequestChain(user: UserDoc, id: string): Promise<Cha
   }
 
   return { valid: true, length, headHash: expectedPrevious };
+}
+
+// ---------------------------------------------------------------------------
+// AI reviewer copilot
+//
+// The copilot only advises. Its recommendation is appended to the same
+// hash-chained history as human decisions, but with its own action type that
+// the routing code never looks at: it can't approve, reject, or advance a
+// request. Actor is `ai:<model>`, which can't collide with a user id.
+// ---------------------------------------------------------------------------
+
+/** A request the user may see and that is still open, with its workflow. */
+export async function loadRequestForAiReview(user: UserDoc, id: string) {
+  const { request, workflow } = await loadVisibleRequest(user, id);
+  if (!isActive(request)) throw new BadRequestException('Request already finalized; there is nothing left to review');
+  if (!workflow) throw new ResourceNotFoundException('Workflow not found');
+  return { request, workflow };
+}
+
+export async function appendAiRecommendation(requestId: string, ai: AiRecommendation) {
+  // The model call takes seconds, so approvers may have acted meanwhile. Reload
+  // and chain onto whatever the head is now; retry if someone saves in between.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const request = await Request.findById(requestId);
+    if (!request) throw new ResourceNotFoundException('Request not found');
+
+    const previousHash = request.history[request.history.length - 1]?.currentHash ?? GENESIS_HASH;
+    const timestamp = new Date();
+    const actedBy = `ai:${ai.model}`;
+    const stepIndex = request.currentStep;
+    const currentHash = computeHash({
+      stepIndex,
+      action: AI_RECOMMENDATION_ACTION,
+      actedBy,
+      timestamp: timestamp.toISOString(),
+      previousHash,
+      aiDigest: aiDigest(ai),
+    });
+    request.history.push({
+      stepIndex,
+      action: AI_RECOMMENDATION_ACTION,
+      actedBy,
+      actedByName: 'AI reviewer',
+      ai,
+      timestamp,
+      previousHash,
+      currentHash,
+    });
+
+    try {
+      await request.save();
+    } catch (err) {
+      if (err instanceof mongoose.Error.VersionError) continue;
+      throw err;
+    }
+    return request.toJSON().history[request.history.length - 1]!;
+  }
+  throw new ConflictException('The request changed while the AI was reviewing it. Try again.');
 }
 
 export async function getAllRequests() {

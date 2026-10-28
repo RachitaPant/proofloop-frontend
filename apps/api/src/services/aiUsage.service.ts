@@ -24,9 +24,10 @@ async function give(bucket: string) {
  * Reserves one AI request for this user, atomically (counters live in the
  * database, so the limits hold across serverless instances). Returns how many
  * requests the user has left this hour. Call `refund` if the request fails
- * before reaching the model, so errors don't burn the allowance.
+ * before reaching the model, so errors don't burn the allowance. Drafts and
+ * reviews share the same allowance; `noun` only words the error message.
  */
-export async function reserveAiRequest(userId: string) {
+export async function reserveAiRequest(userId: string, noun = 'AI drafts') {
   const now = new Date();
   const hourBucket = `user:${userId}:${now.toISOString().slice(0, 13)}`;
   const dayBucket = `global:${now.toISOString().slice(0, 10)}`;
@@ -34,13 +35,13 @@ export async function reserveAiRequest(userId: string) {
   const dayLeft = await take(dayBucket, globalPerDay(), 2 * DAY_MS);
   if (dayLeft < 0) {
     await give(dayBucket);
-    throw new TooManyRequestsException('AI drafting has reached its daily limit. Try again tomorrow.');
+    throw new TooManyRequestsException('The AI assistant has reached its daily limit. Try again tomorrow.');
   }
 
   const hourLeft = await take(hourBucket, perUserPerHour(), 2 * HOUR_MS);
   if (hourLeft < 0) {
     await Promise.all([give(hourBucket), give(dayBucket)]);
-    throw new TooManyRequestsException(`You can generate ${perUserPerHour()} AI drafts per hour. Try again later.`);
+    throw new TooManyRequestsException(`You can generate ${perUserPerHour()} ${noun} per hour. Try again later.`);
   }
 
   return {

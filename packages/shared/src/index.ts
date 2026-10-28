@@ -20,6 +20,10 @@ export const ActionTypeSchema = z.enum(['APPROVED', 'REJECTED']);
 export const ActionType = ActionTypeSchema.enum;
 export type ActionType = z.infer<typeof ActionTypeSchema>;
 
+/** What an audit entry records. People approve or reject; the AI copilot only ever advises. */
+export const AI_RECOMMENDATION_ACTION = 'AI_RECOMMENDATION';
+export type AuditAction = ActionType | typeof AI_RECOMMENDATION_ACTION;
+
 export const ACTIVE_STATUSES: readonly RequestStatus[] = ['PENDING', 'IN_REVIEW'];
 
 // ---------------------------------------------------------------------------
@@ -255,9 +259,35 @@ export interface Workflow {
   createdAt: string;
 }
 
+export type AiRecommendationKind = 'approve' | 'reject' | 'needs_more_info';
+export type AiConfidence = 'low' | 'medium' | 'high';
+export type AiCheckResult = 'pass' | 'warn' | 'fail' | 'info';
+
+/** What the reviewer copilot concluded. Stored in the audit entry and covered by its hash. */
+export interface AiRecommendation {
+  model: string;
+  /** Version of the prompt that produced it, so results can be traced to wording. */
+  promptVersion: string;
+  /** The person who asked for the review. */
+  requestedBy: string;
+  requestedByName: string;
+  /** How many audit entries existed when the model looked; later entries it didn't see. */
+  basedOnEntries: number;
+  summary: string;
+  checks: { name: string; result: AiCheckResult; detail: string }[];
+  concerns: string[];
+  missingInformation: string[];
+  recommendation: AiRecommendationKind;
+  confidence: AiConfidence;
+  rationale: string;
+}
+
 export interface RequestAction {
   stepIndex: number;
-  action: ActionType;
+  /** AI_RECOMMENDATION entries are advice only: they never change a request's status or routing. */
+  action: AuditAction;
+  /** Present on AI_RECOMMENDATION entries; actedBy is then `ai:<model>`. */
+  ai?: AiRecommendation | null;
   actedBy: string;
   actedByName: string;
   /** Set when a delegate acted for someone else. */
@@ -324,6 +354,13 @@ export interface AiWorkflowDraft {
   /** Assumptions the model made, for the human to check. */
   notes: string[];
   model: string;
+  /** Requests left in this hour's allowance. */
+  remainingThisHour: number;
+}
+
+export interface AiReviewResult {
+  /** The audit entry that was appended (its `ai` field holds the review). */
+  entry: RequestAction;
   /** Requests left in this hour's allowance. */
   remainingThisHour: number;
 }
