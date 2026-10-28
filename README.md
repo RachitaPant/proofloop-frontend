@@ -81,6 +81,19 @@ vars: `AI_API_KEY`, `AI_BASE_URL`, `AI_MODEL`).
   passed on. The draft only fills in the form; a human reviews it (with the
   model's stated assumptions) and creates the workflow through the normal,
   permission-checked endpoint.
+- **Reviewer copilot:** on a request's page, anyone who can see it can press
+  **Get AI review**. The model gets the field values, description, the
+  workflow (steps, assignees, conditions) and the audit history, and returns a
+  summary, checks against the workflow, concerns, missing information and a
+  recommendation (approve / reject / needs more info) with a confidence level.
+  It **only advises**: no tools, no write access, and approving or rejecting
+  still goes through the normal endpoints. Each review is appended to the
+  hash-chained audit trail as an `AI_RECOMMENDATION` entry (actor `ai:<model>`,
+  prompt version recorded) and its whole content is covered by the entry hash,
+  so editing or stripping it is caught by **Verify chain**; entries written
+  before it existed verify unchanged. Same safeguards as drafting (schema
+  validation, one repair, shared caps, generic errors); request text and
+  comments are untrusted and are sent as escaped JSON inside a fence.
 - **Safety and limits:** the user's description is fenced as data in the prompt
   and the model has no tools or write access, so injected instructions can only
   change a draft a human then reviews. Group members are never sent to the
