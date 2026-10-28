@@ -1,5 +1,6 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
 import type {
+  AiReviewResult,
   AiStatus,
   AiWorkflowDraft,
   ApproverGroup,
@@ -99,6 +100,8 @@ export const requestApi = {
   reject: (id: string, body: { comment?: string; stepIndex?: number }) =>
     api.post<Request>(`/requests/${id}/reject`, body),
   verify: (id: string) => api.get<ChainVerification>(`/requests/${id}/verify`),
+  // Advice only; the result is also appended to the request's audit history.
+  aiReview: (id: string) => api.post<AiReviewResult>(`/requests/${id}/ai-review`),
 };
 
 // Delegations

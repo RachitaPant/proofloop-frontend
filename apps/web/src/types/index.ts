@@ -19,5 +19,6 @@ export {
   type Delegation,
   type ApproverGroup,
   type AiWorkflowDraft,
+  type AiRecommendation,
   type Analytics,
 } from '@proofloop/shared';

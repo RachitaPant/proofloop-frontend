@@ -1,4 +1,5 @@
-import { CheckCircle2, XCircle, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, XCircle, ShieldCheck, Sparkles } from 'lucide-react';
+import { recommendationLabel } from '@/components/workflow/AiReviewPanel';
 import { RequestAction, WorkflowStep } from '@/types';
 import { cn } from '@/lib/cn';
 
@@ -21,6 +22,7 @@ export default function AuditTrail({ history, steps = [] }: { history: RequestAc
       <ol className="space-y-0">
         {history.map((action, i) => {
           const approved = action.action === 'APPROVED';
+          const advice = action.action === 'AI_RECOMMENDATION';
           const isLast = i === history.length - 1;
           return (
             <li key={i} className="relative flex gap-3 pb-5 last:pb-0">
@@ -28,10 +30,12 @@ export default function AuditTrail({ history, steps = [] }: { history: RequestAc
               <div
                 className={cn(
                   'w-8 h-8 rounded-full flex items-center justify-center shrink-0 z-10',
-                  approved ? 'bg-success-100' : 'bg-danger-100',
+                  advice ? 'bg-accent-50' : approved ? 'bg-success-100' : 'bg-danger-100',
                 )}
               >
-                {approved ? (
+                {advice ? (
+                  <Sparkles className="w-4 h-4 text-accent-600" />
+                ) : approved ? (
                   <CheckCircle2 className="w-4 h-4 text-success-600" />
                 ) : (
                   <XCircle className="w-4 h-4 text-danger-600" />
@@ -41,9 +45,16 @@ export default function AuditTrail({ history, steps = [] }: { history: RequestAc
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-baseline gap-x-2">
                   <span className="font-medium text-navy-900">{action.actedByName}</span>
-                  <span className={cn('text-sm', approved ? 'text-success-700' : 'text-danger-700')}>
-                    {approved ? 'approved' : 'rejected'} {steps[action.stepIndex]?.stepName ?? `step ${action.stepIndex + 1}`}
-                  </span>
+                  {advice && action.ai ? (
+                    <span className="text-sm text-accent-700">
+                      advised: {recommendationLabel[action.ai.recommendation].toLowerCase()} ({action.ai.confidence}{' '}
+                      confidence). Advice only, no decision.
+                    </span>
+                  ) : (
+                    <span className={cn('text-sm', approved ? 'text-success-700' : 'text-danger-700')}>
+                      {approved ? 'approved' : 'rejected'} {steps[action.stepIndex]?.stepName ?? `step ${action.stepIndex + 1}`}
+                    </span>
+                  )}
                   {action.onBehalfOfName && (
                     <span className="text-xs text-accent-700">on behalf of {action.onBehalfOfName}</span>
                   )}
@@ -51,6 +62,11 @@ export default function AuditTrail({ history, steps = [] }: { history: RequestAc
                     {new Date(action.timestamp).toLocaleString()}
                   </span>
                 </div>
+                {advice && action.ai && (
+                  <div className="text-xs text-navy-500 mt-1 break-words">
+                    {action.ai.model} · prompt {action.ai.promptVersion} · asked by {action.ai.requestedByName}
+                  </div>
+                )}
                 {action.comment && (
                   <p className="text-sm text-navy-600 mt-1 italic">&ldquo;{action.comment}&rdquo;</p>
                 )}

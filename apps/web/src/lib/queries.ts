@@ -219,3 +219,12 @@ export function useAiWorkflowDraft() {
     mutationFn: async (prompt: string) => (await aiApi.draftWorkflow(prompt)).data,
   });
 }
+
+export function useAiRequestReview(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => (await requestApi.aiReview(id)).data,
+    // The advice is now part of the request's history.
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.requests.detail(id) }),
+  });
+}
