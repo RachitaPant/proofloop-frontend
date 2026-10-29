@@ -121,6 +121,7 @@ export default function Home() {
                   <Input
                     label="Organisation name"
                     required
+                    autoComplete="organization"
                     maxLength={80}
                     placeholder="e.g. Acme Inc."
                     value={formData.organizationName}
@@ -129,6 +130,7 @@ export default function Home() {
                   <Input
                     label="Your name"
                     required
+                    autoComplete="name"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   />
@@ -138,6 +140,7 @@ export default function Home() {
               <Input
                 label="Email"
                 type="email"
+                autoComplete={isLogin ? 'username' : 'email'}
                 required
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -146,6 +149,7 @@ export default function Home() {
               <Input
                 label="Password"
                 type="password"
+                autoComplete={isLogin ? 'current-password' : 'new-password'}
                 required
                 minLength={isLogin ? undefined : 8}
                 hint={isLogin ? undefined : 'At least 8 characters'}

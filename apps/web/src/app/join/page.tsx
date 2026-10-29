@@ -61,11 +61,12 @@ function JoinForm() {
       </div>
 
       <form onSubmit={submit} className="space-y-4 mt-6">
-        <Input label="Email" type="email" value={email ?? ''} readOnly disabled hint="Your invite is tied to this address" />
-        <Input label="Your name" required value={name} onChange={(e) => setName(e.target.value)} />
+        <Input label="Email" type="email" autoComplete="email" value={email ?? ''} readOnly hint="Your invite is tied to this address" />
+        <Input label="Your name" required autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} />
         <Input
           label="Choose a password"
           type="password"
+          autoComplete="new-password"
           required
           minLength={8}
           hint="At least 8 characters"
