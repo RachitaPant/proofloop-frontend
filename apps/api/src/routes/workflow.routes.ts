@@ -11,12 +11,12 @@ workflowRoutes.post('/', validateBody(CreateWorkflowInput), async (req, res) => 
   res.json(await workflowService.createWorkflow(currentUser(req), req.body));
 });
 
-workflowRoutes.get('/', async (_req, res) => {
-  res.json(await workflowService.getAllWorkflows());
+workflowRoutes.get('/', async (req, res) => {
+  res.json(await workflowService.getAllWorkflows(currentUser(req)));
 });
 
 workflowRoutes.get('/:id', async (req, res) => {
-  res.json(await workflowService.getWorkflowById(req.params.id));
+  res.json(await workflowService.getWorkflowById(currentUser(req), req.params.id));
 });
 
 workflowRoutes.delete('/:id', async (req, res) => {

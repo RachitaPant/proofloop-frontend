@@ -27,7 +27,20 @@ Environment variables (Production and Preview):
 | `ACCESS_TOKEN_TTL_SECONDS` / `REFRESH_TOKEN_TTL_DAYS` | Optional; browser session cookies (default 900 / 30) |
 | `CORS_ALLOWED_ORIGINS` | The web app's URL(s), comma-separated. `*` matches within one domain label, so add `https://proofloop-frontend-*-<team>.vercel.app` to let preview deployments write |
 | `CRON_SECRET`          | Random string; authorises the daily SLA cron                 |
-| `NODE_ENV`             | `production` (disables the demo-data seeder)                 |
+| `NODE_ENV`             | `production` (disables the sample-data seeder)               |
+| `APP_URL`              | The web app's public URL, used for links in invite emails (falls back to the request's origin) |
+| `MAIL_PROVIDER` + credentials | How invite emails are sent: `smtp` (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM`) or `resend` (`RESEND_API_KEY`, `MAIL_FROM`). Optional: without it invites still work, shown as a link to share |
+
+**Email without a domain:** Resend's `onboarding@resend.dev` sender can only
+email your own address, so it can't deliver invites to teammates. Use Gmail SMTP
+instead: turn on 2-Step Verification, create an [app password](https://myaccount.google.com/apppasswords), then set
+`MAIL_PROVIDER=smtp`, `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`,
+`SMTP_USER=<you>@gmail.com`, `SMTP_PASS=<app password>`. When you own a domain,
+verify it in Resend and switch to `MAIL_PROVIDER=resend` (no code change).
+
+Existing data from before organisations existed moves into a default
+"ProofLoop Demo" organisation on the first request after deploy; its earliest
+admin becomes the owner.
 
 The SLA escalation cron runs daily (the Hobby plan's limit), configured in
 `apps/api/vercel.json`. Check `https://<api>/health` returns `{"status":"ok"}`.

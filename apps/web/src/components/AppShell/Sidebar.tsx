@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ShieldCheck, Home, FileText, GitBranch, BarChart3, LogOut, UserCheck } from 'lucide-react';
+import { ShieldCheck, Home, FileText, GitBranch, Settings2, LogOut, UserCheck } from 'lucide-react';
 import { Role } from '@/types';
 import { useAuth } from '@/lib/auth-context';
+import { useOrganization } from '@/lib/queries';
 import { cn } from '@/lib/cn';
 
 const NAV_ITEMS = [
@@ -17,6 +18,7 @@ const NAV_ITEMS = [
 export default function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const { data: org } = useOrganization();
 
   const isActive = (href: string) => pathname === href;
 
@@ -30,6 +32,14 @@ export default function Sidebar() {
         <ShieldCheck className="w-5 h-5 text-brand-600" />
         <span className="font-display font-bold text-navy-900">ProofLoop</span>
       </Link>
+      {org && (
+        <div className="px-5 py-2.5 border-b border-surface-200 text-xs text-navy-500">
+          <span className="block uppercase tracking-wide text-[10px] text-navy-400">Organisation</span>
+          <span className="block font-medium text-navy-800 truncate" title={org.name}>
+            {org.name}
+          </span>
+        </div>
+      )}
 
       <nav className="flex-1 px-3 py-4 space-y-0.5">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
@@ -54,8 +64,8 @@ export default function Sidebar() {
               isActive('/admin') ? 'bg-brand-50 text-brand-700' : 'text-navy-500 hover:bg-surface-50 hover:text-navy-800',
             )}
           >
-            <BarChart3 className="w-4 h-4" />
-            Analytics
+            <Settings2 className="w-4 h-4" />
+            Admin
           </Link>
         )}
       </nav>
@@ -67,7 +77,7 @@ export default function Sidebar() {
           </div>
           <div className="min-w-0 text-sm">
             <div className="font-medium text-navy-900 truncate leading-tight">{user?.name}</div>
-            <div className="text-navy-400 text-xs leading-tight">{user?.role}</div>
+            <div className="text-navy-400 text-xs leading-tight">{user?.isOwner ? 'Owner' : user?.role}</div>
           </div>
         </div>
         <button

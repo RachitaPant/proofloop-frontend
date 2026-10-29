@@ -49,6 +49,12 @@ export function requireRole(...roles: Role[]) {
 
 export const requireAdmin = requireRole('ADMIN');
 
+/** The organisation's super admin (its creator). */
+export function requireOwner(req: Request, _res: Response, next: NextFunction) {
+  if (!req.user?.isOwner) throw new AccessDeniedException('Only the organisation owner can do this');
+  next();
+}
+
 /** The authenticated user. Only valid on routes behind requireAuth. */
 export function currentUser(req: Request): UserDoc {
   if (!req.user) throw new UnauthorizedException();

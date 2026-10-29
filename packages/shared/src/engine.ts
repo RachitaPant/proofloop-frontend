@@ -157,3 +157,23 @@ export function validateFieldValues(
 
   return { values, errors };
 }
+
+// ---------------------------------------------------------------------------
+// Field keys
+// ---------------------------------------------------------------------------
+
+/**
+ * Turns a label into a field key ("Cost centre (EUR)" → "costCentreEur"),
+ * unique within `taken` (which is updated). Used by the workflow builder and
+ * by the AI draft generator so both produce the same keys.
+ */
+export function fieldKeyFromLabel(label: string, taken: Set<string>): string {
+  const words = label.toLowerCase().match(/[a-z0-9]+/g) ?? ['field'];
+  let key = words.map((w, i) => (i === 0 ? w : w[0]!.toUpperCase() + w.slice(1))).join('');
+  if (!/^[a-z]/.test(key)) key = `f${key}`;
+  key = key.slice(0, 40);
+  let unique = key;
+  for (let n = 2; taken.has(unique); n++) unique = `${key}${n}`;
+  taken.add(unique);
+  return unique;
+}

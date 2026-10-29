@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { ServiceUnavailableException } from '../utils/errors';
+import { migrateToOrganizations } from '../services/migration.service';
 
 // Cached across invocations so a serverless platform (Vercel) reuses the
 // connection on warm starts instead of reconnecting on every request.
@@ -23,8 +24,9 @@ export function connectDB(): Promise<typeof mongoose> {
   if (!connectionPromise) {
     connectionPromise = mongoose
       .connect(uri, { dbName: process.env.MONGODB_DATABASE || 'proofloop', serverSelectionTimeoutMS: 8000 })
-      .then((conn) => {
+      .then(async (conn) => {
         console.log('Connected to MongoDB');
+        await migrateToOrganizations();
         return conn;
       })
       .catch((err: Error) => {

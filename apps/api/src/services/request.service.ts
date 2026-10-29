@@ -1,5 +1,7 @@
+import mongoose from 'mongoose';
 import {
   ACTIVE_STATUSES,
+  AI_RECOMMENDATION_ACTION,
   nextActiveStage,
   planSkippedSteps,
   stageOf,
@@ -7,6 +9,7 @@ import {
   validateFieldValues,
   type ActionableStep,
   type ActionType,
+  type AiRecommendation,
   type ChainVerification,
   type CreateRequestInput,
   type Role,
@@ -15,8 +18,9 @@ import { Request, type RequestDoc } from '../models/Request';
 import { Workflow, type WorkflowDoc } from '../models/Workflow';
 import type { UserDoc } from '../models/User';
 import type { DelegationDoc } from '../models/Delegation';
-import { BadRequestException, ResourceNotFoundException, ValidationException } from '../utils/errors';
-import { GENESIS_HASH, computeHash } from '../utils/hash';
+import { ApproverGroup, type ApproverGroupDoc } from '../models/ApproverGroup';
+import { BadRequestException, ConflictException, ResourceNotFoundException, ValidationException } from '../utils/errors';
+import { GENESIS_HASH, aiDigest, computeHash } from '../utils/hash';
 import { activeDelegationsTo } from './delegation.service';
 
 // ---------------------------------------------------------------------------
@@ -63,8 +67,37 @@ function isEscalated(request: RequestDoc, workflow: WorkflowDoc, stepIndex: numb
   );
 }
 
-export function effectiveRequiredRole(request: RequestDoc, workflow: WorkflowDoc, stepIndex: number): Role {
-  return isEscalated(request, workflow, stepIndex) ? 'ADMIN' : workflow.steps[stepIndex]!.requiredRole;
+/** Who a step is assigned to right now: a role, a group, or ADMIN once escalated. */
+export type Assignee = { kind: 'role'; role: Role } | { kind: 'group'; groupId: string };
+
+export function assigneeOf(request: RequestDoc, workflow: WorkflowDoc, stepIndex: number): Assignee {
+  const step = workflow.steps[stepIndex]!;
+  if (isEscalated(request, workflow, stepIndex)) return { kind: 'role', role: 'ADMIN' };
+  if (step.approverGroupId) return { kind: 'group', groupId: step.approverGroupId };
+  return { kind: 'role', role: step.requiredRole ?? 'ADMIN' };
+}
+
+/** What eligibility checks need besides the request: delegations to the viewer and the groups in play. */
+export interface ActorContext {
+  delegations: DelegationDoc[];
+  groups: Map<string, ApproverGroupDoc>;
+}
+
+export async function loadActorContext(user: UserDoc, workflows: (WorkflowDoc | null | undefined)[]): Promise<ActorContext> {
+  const groupIds = [
+    ...new Set(workflows.flatMap((w) => (w?.steps ?? []).flatMap((s) => (s.approverGroupId ? [s.approverGroupId] : [])))),
+  ];
+  const [delegations, groups] = await Promise.all([
+    activeDelegationsTo(user),
+    groupIds.length ? ApproverGroup.find({ orgId: user.orgId, _id: { $in: groupIds } }) : Promise.resolve([]),
+  ]);
+  return { delegations, groups: new Map(groups.map((g) => [g.id as string, g])) };
+}
+
+/** Would this principal (a user, or the delegator a delegate stands in for) fill the step's assignment? */
+function fills(principal: { id: string; role: Role }, assignee: Assignee, groups: ActorContext['groups']) {
+  if (assignee.kind === 'role') return principal.role === assignee.role;
+  return groups.get(assignee.groupId)?.memberIds.includes(principal.id) ?? false;
 }
 
 // One action per person per stage: parallel steps exist to get independent
@@ -91,7 +124,7 @@ function involvedInStage(request: RequestDoc, workflow: WorkflowDoc, userId: str
  */
 function capacityFor(
   user: UserDoc,
-  delegations: DelegationDoc[],
+  ctx: ActorContext,
   request: RequestDoc,
   workflow: WorkflowDoc,
   stepIndex: number,
@@ -99,14 +132,16 @@ function capacityFor(
   if (request.createdBy === user.id) return null;
   if (involvedInStage(request, workflow, user.id)) return null;
 
-  const role = effectiveRequiredRole(request, workflow, stepIndex);
+  const assignee = assigneeOf(request, workflow, stepIndex);
   const approvers = approversFor(request, stepIndex);
 
-  if (user.role === role && !approvers.includes(user.id)) return { stepIndex, onBehalfOf: null };
+  if (fills({ id: user.id, role: user.role }, assignee, ctx.groups) && !approvers.includes(user.id)) {
+    return { stepIndex, onBehalfOf: null };
+  }
 
-  const delegation = delegations.find(
+  const delegation = ctx.delegations.find(
     (d) =>
-      d.role === role &&
+      fills({ id: d.fromUserId, role: d.role }, assignee, ctx.groups) &&
       d.fromUserId !== request.createdBy &&
       !approvers.includes(d.fromUserId) &&
       !involvedInStage(request, workflow, d.fromUserId),
@@ -116,10 +151,10 @@ function capacityFor(
   return null;
 }
 
-function actionableSteps(user: UserDoc, delegations: DelegationDoc[], request: RequestDoc, workflow: WorkflowDoc | null | undefined) {
+function actionableSteps(user: UserDoc, ctx: ActorContext, request: RequestDoc, workflow: WorkflowDoc | null | undefined) {
   if (!workflow) return [];
   return pendingSteps(request, workflow).flatMap((i) => {
-    const capacity = capacityFor(user, delegations, request, workflow, i);
+    const capacity = capacityFor(user, ctx, request, workflow, i);
     return capacity ? [capacity] : [];
   });
 }
@@ -133,17 +168,17 @@ function canView(user: UserDoc, request: RequestDoc, actionable: ActionableStep[
   return actionable.length > 0;
 }
 
-async function findWorkflow(id: string) {
-  return Workflow.findById(id).catch(() => null);
+async function findWorkflow(orgId: string, id: string) {
+  return Workflow.findOne({ _id: id, orgId }).catch(() => null);
 }
 
 // Loads a request the user is allowed to see. Returns 404 (not 403) for
 // requests they can't see, so IDs can't be probed for existence.
 async function loadVisibleRequest(user: UserDoc, id: string) {
-  const request = await Request.findById(id).catch(() => null);
+  const request = await Request.findOne({ _id: id, orgId: user.orgId }).catch(() => null);
   if (!request) throw new ResourceNotFoundException('Request not found');
-  const workflow = await findWorkflow(request.workflowId);
-  const actionable = actionableSteps(user, await activeDelegationsTo(user), request, workflow);
+  const workflow = await findWorkflow(user.orgId, request.workflowId);
+  const actionable = actionableSteps(user, await loadActorContext(user, [workflow]), request, workflow);
   if (!canView(user, request, actionable)) throw new ResourceNotFoundException('Request not found');
   return { request, workflow, actionable };
 }
@@ -161,7 +196,7 @@ function startStage(request: RequestDoc, workflow: WorkflowDoc, stage: number, a
 // ---------------------------------------------------------------------------
 
 export async function createRequest(user: UserDoc, { title, description, workflowId, fields }: CreateRequestInput) {
-  const workflow = await findWorkflow(workflowId);
+  const workflow = await findWorkflow(user.orgId, workflowId);
   if (!workflow) throw new ResourceNotFoundException('Workflow not found');
 
   const { values, errors } = validateFieldValues(workflow.fields ?? [], fields);
@@ -183,6 +218,7 @@ export async function createRequest(user: UserDoc, { title, description, workflo
     description,
     workflowId: workflow.id,
     workflowName: workflow.name,
+    orgId: user.orgId,
     createdBy: user.id,
     createdByName: user.name,
     status: 'PENDING',
@@ -198,23 +234,21 @@ export async function createRequest(user: UserDoc, { title, description, workflo
 }
 
 export async function getMyRequests(user: UserDoc) {
-  const requests = await Request.find({ createdBy: user.id }).sort({ createdAt: -1 });
+  const requests = await Request.find({ orgId: user.orgId, createdBy: user.id }).sort({ createdAt: -1 });
   return requests.map((r) => r.toJSON());
 }
 
 export async function getPendingRequests(user: UserDoc) {
-  const [active, delegations] = await Promise.all([
-    Request.find({ status: { $in: ACTIVE_STATUSES } }).sort({ createdAt: 1 }),
-    activeDelegationsTo(user),
-  ]);
+  const active = await Request.find({ orgId: user.orgId, status: { $in: ACTIVE_STATUSES } }).sort({ createdAt: 1 });
 
-  // One workflow query for the whole batch instead of one per request.
+  // One workflow query (and one delegation + group query) for the whole batch.
   const workflowIds = [...new Set(active.map((r) => r.workflowId))];
-  const workflows = await Workflow.find({ _id: { $in: workflowIds } }).catch(() => []);
+  const workflows = await Workflow.find({ orgId: user.orgId, _id: { $in: workflowIds } }).catch(() => []);
   const byId = new Map(workflows.map((w) => [w.id as string, w]));
+  const ctx = await loadActorContext(user, workflows);
 
   return active.flatMap((r) => {
-    const actionable = actionableSteps(user, delegations, r, byId.get(r.workflowId));
+    const actionable = actionableSteps(user, ctx, r, byId.get(r.workflowId));
     return actionable.length > 0 ? [{ ...r.toJSON(), actionableSteps: actionable }] : [];
   });
 }
@@ -249,15 +283,15 @@ async function processRequest(
   comment?: string | null,
   requestedStep?: number | null,
 ) {
-  const request = await Request.findById(requestId).catch(() => null);
+  const request = await Request.findOne({ _id: requestId, orgId: user.orgId }).catch(() => null);
   if (!request) throw new ResourceNotFoundException('Request not found');
   if (!isActive(request)) throw new BadRequestException('Request already finalized');
 
-  const workflow = await findWorkflow(request.workflowId);
+  const workflow = await findWorkflow(user.orgId, request.workflowId);
   if (!workflow) throw new ResourceNotFoundException('Workflow not found');
 
   const pending = pendingSteps(request, workflow);
-  const candidates = actionableSteps(user, await activeDelegationsTo(user), request, workflow);
+  const candidates = actionableSteps(user, await loadActorContext(user, [workflow]), request, workflow);
 
   let capacity: ActionableStep | undefined;
   if (requestedStep !== undefined && requestedStep !== null) {
@@ -352,6 +386,8 @@ export async function verifyRequestChain(user: UserDoc, id: string): Promise<Cha
       timestamp: new Date(entry.timestamp).toISOString(),
       previousHash: entry.previousHash,
       onBehalfOf: entry.onBehalfOf,
+      // Any entry carrying an AI block is covered, so an `ai` block can't be added to or stripped from one.
+      aiDigest: entry.ai ? aiDigest(entry.ai) : null,
     });
     if (recomputed !== entry.currentHash) return fail('Entry contents do not match its hash');
 
@@ -361,8 +397,66 @@ export async function verifyRequestChain(user: UserDoc, id: string): Promise<Cha
   return { valid: true, length, headHash: expectedPrevious };
 }
 
-export async function getAllRequests() {
-  const requests = await Request.find().sort({ createdAt: -1 });
+// ---------------------------------------------------------------------------
+// AI reviewer copilot
+//
+// The copilot only advises. Its recommendation is appended to the same
+// hash-chained history as human decisions, but with its own action type that
+// the routing code never looks at: it can't approve, reject, or advance a
+// request. Actor is `ai:<model>`, which can't collide with a user id.
+// ---------------------------------------------------------------------------
+
+/** A request the user may see and that is still open, with its workflow. */
+export async function loadRequestForAiReview(user: UserDoc, id: string) {
+  const { request, workflow } = await loadVisibleRequest(user, id);
+  if (!isActive(request)) throw new BadRequestException('Request already finalized; there is nothing left to review');
+  if (!workflow) throw new ResourceNotFoundException('Workflow not found');
+  return { request, workflow };
+}
+
+export async function appendAiRecommendation(requestId: string, ai: AiRecommendation) {
+  // The model call takes seconds, so approvers may have acted meanwhile. Reload
+  // and chain onto whatever the head is now; retry if someone saves in between.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const request = await Request.findById(requestId);
+    if (!request) throw new ResourceNotFoundException('Request not found');
+
+    const previousHash = request.history[request.history.length - 1]?.currentHash ?? GENESIS_HASH;
+    const timestamp = new Date();
+    const actedBy = `ai:${ai.model}`;
+    const stepIndex = request.currentStep;
+    const currentHash = computeHash({
+      stepIndex,
+      action: AI_RECOMMENDATION_ACTION,
+      actedBy,
+      timestamp: timestamp.toISOString(),
+      previousHash,
+      aiDigest: aiDigest(ai),
+    });
+    request.history.push({
+      stepIndex,
+      action: AI_RECOMMENDATION_ACTION,
+      actedBy,
+      actedByName: 'AI reviewer',
+      ai,
+      timestamp,
+      previousHash,
+      currentHash,
+    });
+
+    try {
+      await request.save();
+    } catch (err) {
+      if (err instanceof mongoose.Error.VersionError) continue;
+      throw err;
+    }
+    return request.toJSON().history[request.history.length - 1]!;
+  }
+  throw new ConflictException('The request changed while the AI was reviewing it. Try again.');
+}
+
+export async function getAllRequests(admin: UserDoc) {
+  const requests = await Request.find({ orgId: admin.orgId }).sort({ createdAt: -1 });
   return requests.map((r) => r.toJSON());
 }
 

@@ -11,6 +11,7 @@ export interface IDelegation {
   toUserId: string;
   toUserName: string;
   role: Role;
+  orgId: string;
   startsAt: Date;
   endsAt: Date;
   revokedAt?: Date | null;
@@ -25,6 +26,7 @@ const delegationSchema = new Schema<IDelegation>(
     toUserId: { type: String, required: true, index: true },
     toUserName: { type: String, required: true },
     role: { type: String, enum: ['USER', 'REVIEWER', 'ADMIN'], required: true },
+    orgId: { type: String, index: true },
     startsAt: { type: Date, required: true },
     endsAt: { type: Date, required: true },
     revokedAt: { type: Date, default: null },

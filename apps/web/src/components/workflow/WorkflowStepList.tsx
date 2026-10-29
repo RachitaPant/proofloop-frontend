@@ -121,9 +121,9 @@ function StepCard({
     >
       <div className="flex flex-wrap items-center gap-2">
         <span className={cn('font-medium text-navy-900', skipped && 'line-through text-navy-400')}>{step.stepName}</span>
-        <Badge tone={escalated ? 'danger' : 'neutral'}>
-          {escalated && <AlertTriangle className="w-3 h-3" />}
-          {escalated ? 'ADMIN (escalated)' : step.requiredRole}
+        <Badge tone={escalated ? 'danger' : step.approverGroupId ? 'accent' : 'neutral'}>
+          {escalated ? <AlertTriangle className="w-3 h-3" /> : step.approverGroupId && <Users className="w-3 h-3" />}
+          {escalated ? 'ADMIN (escalated)' : (step.approverGroupName ?? step.requiredRole)}
         </Badge>
         {state === 'complete' && <Badge tone="success">Approved</Badge>}
         {skipped && <Badge tone="neutral">Skipped</Badge>}

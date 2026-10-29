@@ -51,3 +51,16 @@ export class ServiceUnavailableException extends HttpError {
     super(503, 'Service Unavailable', message);
   }
 }
+
+/** The request was understood but the result can't be used (e.g. an AI draft that fails validation). */
+export class UnprocessableException extends HttpError {
+  constructor(message: string) {
+    super(422, 'Unprocessable Entity', message);
+  }
+}
+
+export class TooManyRequestsException extends HttpError {
+  constructor(message: string) {
+    super(429, 'Too Many Requests', message);
+  }
+}

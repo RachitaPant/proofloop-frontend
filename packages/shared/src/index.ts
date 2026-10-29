@@ -20,6 +20,10 @@ export const ActionTypeSchema = z.enum(['APPROVED', 'REJECTED']);
 export const ActionType = ActionTypeSchema.enum;
 export type ActionType = z.infer<typeof ActionTypeSchema>;
 
+/** What an audit entry records. People approve or reject; the AI copilot only ever advises. */
+export const AI_RECOMMENDATION_ACTION = 'AI_RECOMMENDATION';
+export type AuditAction = ActionType | typeof AI_RECOMMENDATION_ACTION;
+
 export const ACTIVE_STATUSES: readonly RequestStatus[] = ['PENDING', 'IN_REVIEW'];
 
 // ---------------------------------------------------------------------------
@@ -32,6 +36,10 @@ export const RegisterInput = z.object({
   name: requiredText('Name is required').max(100, 'Name is too long'),
   email: z.email('Email must be valid'),
   password: z.string({ error: 'Password is required' }).min(8, 'Password must be at least 8 characters').max(200),
+  /** Join an existing organisation through an invite link... */
+  inviteToken: z.string().min(20).max(200).nullish(),
+  /** ...or name the new organisation this sign-up creates. */
+  organizationName: z.string().trim().max(80, 'Organisation name is too long').nullish(),
 });
 export type RegisterInput = z.infer<typeof RegisterInput>;
 
@@ -76,7 +84,10 @@ export type StepCondition = z.infer<typeof StepConditionInput>;
 export const WorkflowStepInput = z.object({
   stepIndex: z.number({ error: 'Step index is required' }).int().min(0),
   stepName: requiredText('Step name is required').max(100, 'Step name is too long'),
-  requiredRole: RoleSchema,
+  /** Who may act: everyone with this role... */
+  requiredRole: RoleSchema.nullish(),
+  /** ...or the members of this approver group. Exactly one of the two is set. */
+  approverGroupId: z.string().regex(/^[a-f0-9]{24}$/, 'Unknown approver group').nullish(),
   requiredApprovals: z.number().int().min(1, 'Required approvals must be at least 1').nullish(),
   slaHours: z.number().int().min(1, 'SLA hours must be at least 1 if specified').nullish(),
   /** Steps sharing a stage run in parallel. Defaults to the step's position (sequential). */
@@ -111,6 +122,13 @@ export const CreateWorkflowInput = z
     });
 
     wf.steps.forEach((step, i) => {
+      if (!step.requiredRole === !step.approverGroupId) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['steps', i, 'requiredRole'],
+          message: 'Each step needs either a required role or an approver group (not both)',
+        });
+      }
       step.condition?.rules.forEach((rule, r) => {
         const path = ['steps', i, 'condition', 'rules', r];
         const field = byKey.get(rule.field);
@@ -167,6 +185,39 @@ export const CreateDelegationInput = z.object({
 });
 export type CreateDelegationInput = z.infer<typeof CreateDelegationInput>;
 
+// Named sets of users (e.g. "Finance team") that workflow steps can be assigned to.
+export const ApproverGroupInput = z.object({
+  name: requiredText('Group name is required').max(60, 'Group name is too long'),
+  description: z.string().max(300, 'Description is too long').nullish(),
+  memberIds: z.array(z.string().regex(/^[a-f0-9]{24}$/, 'Unknown user')).max(200, 'A group can have at most 200 members').default([]),
+});
+export type ApproverGroupInput = z.infer<typeof ApproverGroupInput>;
+export type ApproverGroupPayload = z.input<typeof ApproverGroupInput>;
+
+// AI-assisted workflow drafting: describe a process in plain English, get a
+// draft workflow to review. The draft is never saved by the AI endpoint.
+export const AiWorkflowDraftInput = z.object({
+  prompt: z
+    .string({ error: 'Describe the workflow you want' })
+    .trim()
+    .min(10, 'Describe the workflow in a bit more detail')
+    .max(2000, 'Keep the description under 2000 characters'),
+});
+export type AiWorkflowDraftInput = z.infer<typeof AiWorkflowDraftInput>;
+
+export const CreateInviteInput = z.object({
+  role: RoleSchema.default('USER'),
+  /** The address being invited: only this address may use the invite. */
+  email: z.email('Email must be valid').max(200),
+});
+export type CreateInviteInput = z.infer<typeof CreateInviteInput>;
+export type CreateInvitePayload = z.input<typeof CreateInviteInput>;
+
+export const UpdateOrganizationInput = z.object({
+  name: requiredText('Organisation name is required').max(80, 'Organisation name is too long'),
+});
+export type UpdateOrganizationInput = z.infer<typeof UpdateOrganizationInput>;
+
 export const UpdateRoleInput = z.object({
   role: RoleSchema,
 });
@@ -180,8 +231,46 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  /** The user's role inside their organisation. */
   role: Role;
+  orgId?: string;
+  /** The organisation's owner (its super admin): can't be demoted or removed. */
+  isOwner?: boolean;
   createdAt?: string;
+}
+
+export interface Organization {
+  id: string;
+  name: string;
+  memberCount: number;
+  createdAt: string;
+}
+
+export interface Invite {
+  id: string;
+  role: Role;
+  email: string;
+  createdByName: string;
+  expiresAt: string;
+  createdAt: string;
+}
+
+/** How delivery of an invite email went. The link works either way. */
+export type EmailStatus = 'sent' | 'failed' | 'not_configured';
+
+/** Returned when an invite is created or re-sent: the only time the link exists. */
+export interface CreatedInvite extends Invite {
+  token: string;
+  link: string;
+  emailStatus: EmailStatus;
+}
+
+/** What the join page shows before sign-up. */
+export interface InvitePreview {
+  valid: boolean;
+  orgName?: string;
+  role?: Role;
+  email?: string;
 }
 
 export interface AuthResponse {
@@ -190,6 +279,8 @@ export interface AuthResponse {
   name: string;
   email: string;
   role: Role;
+  orgId?: string;
+  isOwner?: boolean;
 }
 
 export interface WorkflowField {
@@ -203,7 +294,11 @@ export interface WorkflowField {
 export interface WorkflowStep {
   stepIndex: number;
   stepName: string;
-  requiredRole: Role;
+  /** Set for role-based steps. */
+  requiredRole?: Role | null;
+  /** Set for group-based steps (with the group's name at save time, for display). */
+  approverGroupId?: string | null;
+  approverGroupName?: string | null;
   requiredApprovals: number;
   slaHours?: number | null;
   /** Steps with the same stage run in parallel; stages run in order. */
@@ -221,9 +316,35 @@ export interface Workflow {
   createdAt: string;
 }
 
+export type AiRecommendationKind = 'approve' | 'reject' | 'needs_more_info';
+export type AiConfidence = 'low' | 'medium' | 'high';
+export type AiCheckResult = 'pass' | 'warn' | 'fail' | 'info';
+
+/** What the reviewer copilot concluded. Stored in the audit entry and covered by its hash. */
+export interface AiRecommendation {
+  model: string;
+  /** Version of the prompt that produced it, so results can be traced to wording. */
+  promptVersion: string;
+  /** The person who asked for the review. */
+  requestedBy: string;
+  requestedByName: string;
+  /** How many audit entries existed when the model looked; later entries it didn't see. */
+  basedOnEntries: number;
+  summary: string;
+  checks: { name: string; result: AiCheckResult; detail: string }[];
+  concerns: string[];
+  missingInformation: string[];
+  recommendation: AiRecommendationKind;
+  confidence: AiConfidence;
+  rationale: string;
+}
+
 export interface RequestAction {
   stepIndex: number;
-  action: ActionType;
+  /** AI_RECOMMENDATION entries are advice only: they never change a request's status or routing. */
+  action: AuditAction;
+  /** Present on AI_RECOMMENDATION entries; actedBy is then `ai:<model>`. */
+  ai?: AiRecommendation | null;
   actedBy: string;
   actedByName: string;
   /** Set when a delegate acted for someone else. */
@@ -271,6 +392,38 @@ export interface ApprovalRequest {
   originalRequiredRole?: Role | null;
   /** Only on single-request reads: what the viewer can act on. */
   actionableSteps?: ActionableStep[];
+}
+
+export interface ApproverGroup {
+  id: string;
+  name: string;
+  description?: string | null;
+  memberIds: string[];
+  /** Resolved for display. */
+  members: { id: string; name: string; email: string }[];
+  createdAt: string;
+}
+
+/** What the AI produced, ready to load into the workflow builder. */
+export interface AiWorkflowDraft {
+  /** Same shape the builder submits; validated against CreateWorkflowInput. */
+  workflow: CreateWorkflowPayload;
+  /** Assumptions the model made, for the human to check. */
+  notes: string[];
+  model: string;
+  /** Requests left in this hour's allowance. */
+  remainingThisHour: number;
+}
+
+export interface AiReviewResult {
+  /** The audit entry that was appended (its `ai` field holds the review). */
+  entry: RequestAction;
+  /** Requests left in this hour's allowance. */
+  remainingThisHour: number;
+}
+
+export interface AiStatus {
+  enabled: boolean;
 }
 
 export interface Delegation {

@@ -1,15 +1,17 @@
 import { Schema, model, type HydratedDocument } from 'mongoose';
-import type { ActionType, FieldValue, RequestStatus, Role } from '@proofloop/shared';
+import type { AiRecommendation, AuditAction, FieldValue, RequestStatus, Role } from '@proofloop/shared';
 
 export interface IRequestAction {
   stepIndex: number;
-  action: ActionType;
+  action: AuditAction;
   actedBy: string;
   actedByName: string;
   /** The delegator, when a delegate acted on their behalf. */
   onBehalfOf?: string | null;
   onBehalfOfName?: string | null;
   comment?: string | null;
+  /** Only on AI_RECOMMENDATION entries; covered by the entry's hash. */
+  ai?: AiRecommendation | null;
   timestamp: Date;
   previousHash?: string;
   currentHash?: string;
@@ -22,6 +24,7 @@ export interface IRequest {
   workflowName: string;
   createdBy: string;
   createdByName: string;
+  orgId: string;
   currentStep: number;
   status: RequestStatus;
   history: IRequestAction[];
@@ -45,12 +48,13 @@ export interface IRequest {
 const requestActionSchema = new Schema<IRequestAction>(
   {
     stepIndex: { type: Number, required: true },
-    action: { type: String, enum: ['APPROVED', 'REJECTED'], required: true },
+    action: { type: String, enum: ['APPROVED', 'REJECTED', 'AI_RECOMMENDATION'], required: true },
     actedBy: { type: String, required: true },
     actedByName: { type: String, required: true },
     onBehalfOf: { type: String },
     onBehalfOfName: { type: String },
     comment: { type: String },
+    ai: { type: Schema.Types.Mixed },
     timestamp: { type: Date, required: true },
     previousHash: { type: String },
     currentHash: { type: String },
@@ -66,6 +70,7 @@ const requestSchema = new Schema<IRequest>(
     workflowName: { type: String, required: true },
     createdBy: { type: String, required: true },
     createdByName: { type: String, required: true },
+    orgId: { type: String, index: true },
     currentStep: { type: Number, default: 0 },
     status: { type: String, enum: ['PENDING', 'IN_REVIEW', 'APPROVED', 'REJECTED'], required: true },
     history: { type: [requestActionSchema], default: [] },

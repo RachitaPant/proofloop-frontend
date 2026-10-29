@@ -3,16 +3,18 @@
 import toast from 'react-hot-toast';
 import { Search, Bell, ShieldCheck, LogOut } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
+import { useOrganization } from '@/lib/queries';
 
 export default function Topbar() {
   const { logout } = useAuth();
+  const { data: org } = useOrganization();
 
   return (
     <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-xs border-b border-surface-200">
       <div className="h-16 flex items-center justify-between gap-4 px-4 sm:px-6">
-        <div className="flex items-center gap-2 md:hidden font-display font-bold text-navy-900">
-          <ShieldCheck className="w-5 h-5 text-brand-600" />
-          ProofLoop
+        <div className="flex items-center gap-2 md:hidden font-display font-bold text-navy-900 min-w-0">
+          <ShieldCheck className="w-5 h-5 text-brand-600 shrink-0" />
+          <span className="truncate">{org?.name ?? 'ProofLoop'}</span>
         </div>
 
         <div className="hidden sm:flex items-center gap-2 text-sm text-navy-400 bg-surface-50 border border-surface-200 rounded-md px-3 py-2 w-full max-w-xs">

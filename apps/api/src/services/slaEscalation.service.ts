@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import { ACTIVE_STATUSES } from '@proofloop/shared';
 import { Request, type RequestDoc } from '../models/Request';
 import { Workflow, type WorkflowDoc } from '../models/Workflow';
-import { effectiveRequiredRole, pendingSteps } from './request.service';
+import { assigneeOf, pendingSteps } from './request.service';
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -11,8 +11,8 @@ const HOUR_MS = 60 * 60 * 1000;
 // (escalatedSteps + escalated + originalRequiredRole); the shared workflow
 // template is never modified, so other requests on the same workflow are
 // unaffected. Parallel steps escalate independently.
-export async function checkAndEscalateRequests(): Promise<number> {
-  const activeRequests = await Request.find({ status: { $in: ACTIVE_STATUSES } });
+export async function checkAndEscalateRequests(orgId?: string): Promise<number> {
+  const activeRequests = await Request.find({ ...(orgId ? { orgId } : {}), status: { $in: ACTIVE_STATUSES } });
 
   const workflowIds = [...new Set(activeRequests.map((r) => r.workflowId))];
   const workflows = await Workflow.find({ _id: { $in: workflowIds } }).catch(() => []);
@@ -42,7 +42,8 @@ async function checkAndEscalateIfNeeded(request: RequestDoc, workflow: WorkflowD
     const step = workflow.steps[i]!;
     if (!step.slaHours || step.slaHours <= 0) return false;
     // Already escalated, or nowhere higher to escalate to.
-    if (effectiveRequiredRole(request, workflow, i) === 'ADMIN') return false;
+    const assignee = assigneeOf(request, workflow, i);
+    if (assignee.kind === 'role' && assignee.role === 'ADMIN') return false;
     const startedAt = request.stepStartTimes.get(String(i)) ?? request.createdAt;
     return (now - new Date(startedAt).getTime()) / HOUR_MS > step.slaHours;
   });
@@ -50,7 +51,8 @@ async function checkAndEscalateIfNeeded(request: RequestDoc, workflow: WorkflowD
 
   request.escalatedSteps = [...request.escalatedSteps, ...breached];
   request.escalated = true;
-  request.originalRequiredRole = workflow.steps[breached[0]!]!.requiredRole;
+  // Group steps have no role to record; their group stays visible on the workflow.
+  request.originalRequiredRole = workflow.steps[breached[0]!]!.requiredRole ?? null;
   await request.save();
   console.log(`Request ${request.id}: steps ${breached.join(', ')} escalated to ADMIN after missing their SLA`);
   return true;

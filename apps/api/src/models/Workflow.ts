@@ -12,7 +12,11 @@ export interface IWorkflowField {
 export interface IWorkflowStep {
   stepIndex: number;
   stepName: string;
-  requiredRole: Role;
+  /** Role-based step... */
+  requiredRole?: Role | null;
+  /** ...or group-based step (name kept for display). Exactly one is set. */
+  approverGroupId?: string | null;
+  approverGroupName?: string | null;
   requiredApprovals: number;
   slaHours?: number | null;
   /** Absent on workflows created before stages existed: those run one step per stage. */
@@ -24,6 +28,7 @@ export interface IWorkflow {
   name: string;
   description?: string | null;
   createdBy: string;
+  orgId: string;
   fields: IWorkflowField[];
   steps: IWorkflowStep[];
   createdAt: Date;
@@ -45,7 +50,9 @@ const workflowStepSchema = new Schema<IWorkflowStep>(
   {
     stepIndex: { type: Number, required: true },
     stepName: { type: String, required: true },
-    requiredRole: { type: String, enum: ['USER', 'REVIEWER', 'ADMIN'], required: true },
+    requiredRole: { type: String, enum: ['USER', 'REVIEWER', 'ADMIN', null], default: null },
+    approverGroupId: { type: String, default: null },
+    approverGroupName: { type: String, default: null },
     requiredApprovals: { type: Number, default: 1 },
     slaHours: { type: Number, default: null },
     stage: { type: Number },
@@ -60,6 +67,7 @@ const workflowSchema = new Schema<IWorkflow>(
     name: { type: String, required: true },
     description: { type: String },
     createdBy: { type: String, required: true },
+    orgId: { type: String, index: true },
     fields: { type: [workflowFieldSchema], default: [] },
     steps: { type: [workflowStepSchema], required: true },
   },

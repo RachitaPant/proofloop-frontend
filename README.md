@@ -28,13 +28,30 @@ cp apps/web/.env.example apps/web/.env       # API_URL=http://localhost:8080
 pnpm dev                                 # api on :8080, web on :3000
 ```
 
-In development the API seeds demo users on an empty database:
+## Organisations and teams
 
-| Role     | Email                  | Password    |
-| -------- | ---------------------- | ----------- |
-| Admin    | admin@proofloop.com    | admin123    |
-| Reviewer | reviewer@proofloop.com | reviewer123 |
-| User     | user@proofloop.com     | user123     |
+ProofLoop is multi-tenant. There are no shared logins: you either **create an
+organisation** (you become its owner, a super admin who can't be demoted or
+removed) or **join one by invite**.
+
+- The owner and admins invite people by email from **Admin → Team**, choosing a
+  role (Member, Reviewer, or Admin; only the owner can invite or manage admins).
+- An invite is bound to one email address, works once, expires after 7 days,
+  and is stored hashed. Every invite also shows a copyable link, so it works
+  even where email isn't configured.
+- Every workflow, request, group, delegation and AI call belongs to one
+  organisation and every query is scoped to it; another organisation's records
+  answer 404. This is covered by cross-organisation tests.
+
+Invite emails go through a small pluggable mailer, chosen by environment
+variables (see `apps/api/.env.example`): **SMTP** (e.g. a Gmail app password,
+which delivers to anyone with no domain), **Resend** (needs a verified domain to
+email anyone but yourself), or **console** for local development.
+
+In development only, the API seeds one sample organisation ("Acme (sample)")
+into an empty database: `admin@proofloop.com` / `admin123` (owner),
+`reviewer@proofloop.com` / `reviewer123`, `user@proofloop.com` / `user123`.
+Nothing is seeded in production.
 
 ## Scripts (run from the repo root)
 
@@ -61,6 +78,50 @@ to `main` and on every pull request.
 - **API clients** (Postman, scripts, agents) send `Authorization: Bearer <token>`
   using the `token` returned by `/api/auth/login`.
 
+## AI features (optional)
+
+Set `AI_API_KEY` on the API to enable them; without it the AI controls are
+hidden and the endpoints return 503. They work with **any OpenAI-compatible
+chat API**, and the default setup uses [Groq](https://console.groq.com)'s free
+tier with `openai/gpt-oss-120b` (no vendor SDK: one `fetch`, so switching to
+OpenRouter, Gemini's compatibility endpoint, or a local Ollama is three env
+vars: `AI_API_KEY`, `AI_BASE_URL`, `AI_MODEL`).
+
+- **AI workflow drafting:** describe a process in plain English in the workflow
+  builder ("manager, then legal and security together, CFO above 100k") and the
+  model drafts the fields, steps, conditions, parallel stages and approver
+  groups. It returns schema-constrained JSON (strict `json_schema` where the
+  provider supports it, plain JSON mode otherwise, detected automatically); the
+  server maps it onto the real workflow schema and **re-validates**. Small free
+  models slip now and then, so an unusable reply gets one repair attempt that
+  tells the model what was wrong, and after that the draft is rejected, never
+  passed on. The draft only fills in the form; a human reviews it (with the
+  model's stated assumptions) and creates the workflow through the normal,
+  permission-checked endpoint.
+- **Reviewer copilot:** on a request's page, anyone who can see it can press
+  **Get AI review**. The model gets the field values, description, the
+  workflow (steps, assignees, conditions) and the audit history, and returns a
+  summary, checks against the workflow, concerns, missing information and a
+  recommendation (approve / reject / needs more info) with a confidence level.
+  It **only advises**: no tools, no write access, and approving or rejecting
+  still goes through the normal endpoints. Each review is appended to the
+  hash-chained audit trail as an `AI_RECOMMENDATION` entry (actor `ai:<model>`,
+  prompt version recorded) and its whole content is covered by the entry hash,
+  so editing or stripping it is caught by **Verify chain**; entries written
+  before it existed verify unchanged. Same safeguards as drafting (schema
+  validation, one repair, shared caps, generic errors); request text and
+  comments are untrusted and are sent as escaped JSON inside a fence.
+- **Safety and limits:** the user's description is fenced as data in the prompt
+  and the model has no tools or write access, so injected instructions can only
+  change a draft a human then reviews. Group members are never sent to the
+  model. Usage is capped per user per hour and across all users per day
+  (counters live in MongoDB, so the limits hold across serverless instances),
+  which also keeps you inside a free tier's quota; failed calls are refunded;
+  provider errors are logged, never returned.
+- **Privacy:** workflow descriptions and approver-group names are sent to the
+  provider. Free tiers of some providers (notably Google Gemini's) may use
+  prompts to improve their products, so don't put confidential details in them.
+
 ## How approvals work
 
 - A workflow defines **request fields** (number, text, choice) and **steps**.
@@ -74,6 +135,9 @@ to `main` and on every pull request.
   evaluated with a fixed set of operators (never `eval`). The routing is
   decided when the request is created and stored with it. The request form
   previews the route live, using the same engine (`packages/shared`).
+- **Approver groups:** a step can go to a named team (e.g. *Finance team*)
+  instead of a role. Admins manage groups on the admin page; membership is read
+  when someone acts, so changes apply to open requests immediately.
 - **Delegation:** anyone can let a named colleague approve in their place for
   up to 90 days. It covers approval steps only (never admin access) and ends if
   the delegator loses the role. The audit trail records "on behalf of".

@@ -1,9 +1,19 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
 import type {
+  AiReviewResult,
+  AiStatus,
+  AiWorkflowDraft,
+  ApproverGroup,
+  ApproverGroupPayload,
   CreateDelegationInput,
   CreateRequestPayload,
+  CreateInvitePayload,
   CreateWorkflowPayload,
+  CreatedInvite,
   Delegation,
+  Invite,
+  InvitePreview,
+  Organization,
   MyDelegations,
 } from '@proofloop/shared';
 import { AuthResponse, Workflow, Request, Analytics, User, Role, ChainVerification } from '@/types';
@@ -68,8 +78,16 @@ api.interceptors.response.use(
 
 // Auth
 export const authApi = {
-  register: (data: { name: string; email: string; password: string }) =>
-    api.post<AuthResponse>('/auth/register', data),
+  // Either organizationName (create an organisation, become its owner) or
+  // inviteToken (join the organisation that invited you).
+  register: (data: {
+    name: string;
+    email: string;
+    password: string;
+    organizationName?: string;
+    inviteToken?: string;
+  }) => api.post<AuthResponse>('/auth/register', data),
+  invitePreview: (token: string) => api.get<InvitePreview>(`/auth/invite/${encodeURIComponent(token)}`),
   login: (data: { email: string; password: string }) =>
     api.post<AuthResponse>('/auth/login', data),
   logout: () => api.post('/auth/logout'),
@@ -95,6 +113,8 @@ export const requestApi = {
   reject: (id: string, body: { comment?: string; stepIndex?: number }) =>
     api.post<Request>(`/requests/${id}/reject`, body),
   verify: (id: string) => api.get<ChainVerification>(`/requests/${id}/verify`),
+  // Advice only; the result is also appended to the request's audit history.
+  aiReview: (id: string) => api.post<AiReviewResult>(`/requests/${id}/ai-review`),
 };
 
 // Delegations
@@ -104,12 +124,36 @@ export const delegationApi = {
   revoke: (id: string) => api.delete<Delegation>(`/delegations/${id}`),
 };
 
+// Approver groups (readable by everyone signed in; managed by admins)
+export const groupApi = {
+  list: () => api.get<ApproverGroup[]>('/groups'),
+  create: (data: ApproverGroupPayload) => api.post<ApproverGroup>('/groups', data),
+  update: (id: string, data: ApproverGroupPayload) => api.put<ApproverGroup>(`/groups/${id}`, data),
+  delete: (id: string) => api.delete(`/groups/${id}`),
+};
+
+// AI assistance (drafts only; nothing is saved by these calls)
+export const aiApi = {
+  status: () => api.get<AiStatus>('/ai/status'),
+  draftWorkflow: (prompt: string) => api.post<AiWorkflowDraft>('/ai/workflow-draft', { prompt }),
+};
+
+// The signed-in user's organisation
+export const orgApi = {
+  get: () => api.get<Organization>('/org'),
+};
+
 // Admin
 export const adminApi = {
   getAnalytics: () => api.get<Analytics>('/admin/analytics'),
   getAllRequests: () => api.get<Request[]>('/admin/requests'),
   getUsers: () => api.get<User[]>('/admin/users'),
   updateUserRole: (id: string, role: Role) => api.patch<User>(`/admin/users/${id}/role`, { role }),
+  removeUser: (id: string) => api.delete(`/admin/users/${id}`),
+  listInvites: () => api.get<Invite[]>('/admin/invites'),
+  createInvite: (data: CreateInvitePayload) => api.post<CreatedInvite>('/admin/invites', data),
+  resendInvite: (id: string) => api.post<CreatedInvite>(`/admin/invites/${id}/resend`),
+  revokeInvite: (id: string) => api.delete(`/admin/invites/${id}`),
 };
 
 export default api;

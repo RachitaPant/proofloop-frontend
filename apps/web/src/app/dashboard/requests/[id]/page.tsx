@@ -17,6 +17,7 @@ import Spinner from "@/components/ui/Spinner";
 import EmptyState from "@/components/ui/EmptyState";
 import WorkflowStepList, { type StepState } from "@/components/workflow/WorkflowStepList";
 import AuditTrail from "@/components/workflow/AuditTrail";
+import AiReviewPanel from "@/components/workflow/AiReviewPanel";
 import { cn } from "@/lib/cn";
 
 export default function RequestDetailPage() {
@@ -133,6 +134,12 @@ export default function RequestDetailPage() {
               />
             </CardBody>
           </Card>
+
+          <AiReviewPanel
+            requestId={id}
+            history={request.history}
+            open={request.status === RequestStatus.PENDING || request.status === RequestStatus.IN_REVIEW}
+          />
 
           {selected && (
             <Card>
