@@ -279,6 +279,8 @@ export interface AuthResponse {
   name: string;
   email: string;
   role: Role;
+  orgId?: string;
+  isOwner?: boolean;
 }
 
 export interface WorkflowField {

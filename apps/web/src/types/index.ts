@@ -21,4 +21,9 @@ export {
   type AiWorkflowDraft,
   type AiRecommendation,
   type Analytics,
+  type Organization,
+  type Invite,
+  type CreatedInvite,
+  type InvitePreview,
+  type EmailStatus,
 } from '@proofloop/shared';

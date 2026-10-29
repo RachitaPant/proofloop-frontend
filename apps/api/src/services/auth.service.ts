@@ -16,6 +16,8 @@ export function toAuthResponse(user: UserDoc): AuthResponse {
     name: user.name,
     email: user.email,
     role: user.role,
+    orgId: user.orgId,
+    isOwner: Boolean(user.isOwner),
   };
 }
 

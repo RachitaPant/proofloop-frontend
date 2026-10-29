@@ -30,6 +30,7 @@ export default function Home() {
   const [isLogin, setIsLogin] = useState(true);
   const [formData, setFormData] = useState({
     name: '',
+    organizationName: '',
     email: '',
     password: '',
   });
@@ -42,7 +43,12 @@ export default function Home() {
       if (isLogin) {
         await login(formData.email, formData.password);
       } else {
-        await register(formData.name, formData.email, formData.password);
+        await register({
+          name: formData.name,
+          email: formData.email,
+          password: formData.password,
+          organizationName: formData.organizationName,
+        });
       }
     } catch (error) {
       console.error(error);
@@ -96,28 +102,37 @@ export default function Home() {
             </div>
 
             <div className="bg-white p-5 rounded-lg border border-surface-200 shadow-sm">
-              <h4 className="font-semibold text-sm text-navy-900 mb-2">Demo credentials</h4>
-              <div className="space-y-1 text-sm text-navy-600 font-mono">
-                <p>admin@proofloop.com / admin123</p>
-                <p>reviewer@proofloop.com / reviewer123</p>
-                <p>user@proofloop.com / user123</p>
-              </div>
+              <h4 className="font-semibold text-sm text-navy-900 mb-1">Built for teams</h4>
+              <p className="text-sm text-navy-500">
+                Create an organisation and you become its owner. Invite your team by email, and give each person
+                the access they need.
+              </p>
             </div>
           </div>
 
           <div className="bg-white p-8 rounded-xl shadow-lg border border-surface-200">
             <h2 className="font-display text-xl font-bold mb-6 text-center text-navy-900">
-              {isLogin ? 'Sign in to ProofLoop' : 'Create your account'}
+              {isLogin ? 'Sign in to ProofLoop' : 'Create your organisation'}
             </h2>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               {!isLogin && (
-                <Input
-                  label="Name"
-                  required
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                />
+                <>
+                  <Input
+                    label="Organisation name"
+                    required
+                    maxLength={80}
+                    placeholder="e.g. Acme Inc."
+                    value={formData.organizationName}
+                    onChange={(e) => setFormData({ ...formData, organizationName: e.target.value })}
+                  />
+                  <Input
+                    label="Your name"
+                    required
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  />
+                </>
               )}
 
               <Input
@@ -140,23 +155,23 @@ export default function Home() {
 
               {!isLogin && (
                 <p className="text-xs text-navy-500">
-                  New accounts start as <span className="font-medium">User</span>. An admin can grant Reviewer or
-                  Admin access.
+                  You&rsquo;ll be the organisation&rsquo;s <span className="font-medium">owner</span> (super admin).
+                  Joining a team instead? Open the invite link you were emailed.
                 </p>
               )}
 
               <Button type="submit" size="lg" loading={loading} className="w-full">
-                {isLogin ? 'Sign In' : 'Create Account'}
+                {isLogin ? 'Sign In' : 'Create Organisation'}
               </Button>
             </form>
 
             <p className="text-center mt-4 text-sm text-navy-500">
-              {isLogin ? "Don't have an account? " : 'Already have an account? '}
+              {isLogin ? 'Setting up a new team? ' : 'Already have an account? '}
               <button
                 onClick={() => setIsLogin(!isLogin)}
                 className="text-brand-600 hover:text-brand-700 hover:underline font-medium"
               >
-                {isLogin ? 'Sign Up' : 'Sign In'}
+                {isLogin ? 'Create an organisation' : 'Sign In'}
               </button>
             </p>
           </div>

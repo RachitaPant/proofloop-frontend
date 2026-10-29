@@ -28,13 +28,30 @@ cp apps/web/.env.example apps/web/.env       # API_URL=http://localhost:8080
 pnpm dev                                 # api on :8080, web on :3000
 ```
 
-In development the API seeds demo users on an empty database:
+## Organisations and teams
 
-| Role     | Email                  | Password    |
-| -------- | ---------------------- | ----------- |
-| Admin    | admin@proofloop.com    | admin123    |
-| Reviewer | reviewer@proofloop.com | reviewer123 |
-| User     | user@proofloop.com     | user123     |
+ProofLoop is multi-tenant. There are no shared logins: you either **create an
+organisation** (you become its owner, a super admin who can't be demoted or
+removed) or **join one by invite**.
+
+- The owner and admins invite people by email from **Admin → Team**, choosing a
+  role (Member, Reviewer, or Admin; only the owner can invite or manage admins).
+- An invite is bound to one email address, works once, expires after 7 days,
+  and is stored hashed. Every invite also shows a copyable link, so it works
+  even where email isn't configured.
+- Every workflow, request, group, delegation and AI call belongs to one
+  organisation and every query is scoped to it; another organisation's records
+  answer 404. This is covered by cross-organisation tests.
+
+Invite emails go through a small pluggable mailer, chosen by environment
+variables (see `apps/api/.env.example`): **SMTP** (e.g. a Gmail app password,
+which delivers to anyone with no domain), **Resend** (needs a verified domain to
+email anyone but yourself), or **console** for local development.
+
+In development only, the API seeds one sample organisation ("Acme (sample)")
+into an empty database: `admin@proofloop.com` / `admin123` (owner),
+`reviewer@proofloop.com` / `reviewer123`, `user@proofloop.com` / `user123`.
+Nothing is seeded in production.
 
 ## Scripts (run from the repo root)
 

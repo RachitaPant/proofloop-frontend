@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ApproverGroupPayload, CreateDelegationInput, CreateRequestPayload, CreateWorkflowPayload } from '@proofloop/shared';
+import type { ApproverGroupPayload, CreateDelegationInput, CreateInvitePayload, CreateRequestPayload, CreateWorkflowPayload } from '@proofloop/shared';
 import type { Role, User } from '@/types';
-import { adminApi, aiApi, delegationApi, groupApi, requestApi, workflowApi } from '@/lib/api';
+import { adminApi, aiApi, authApi, delegationApi, groupApi, orgApi, requestApi, workflowApi } from '@/lib/api';
 
 // Every server-state read and write in the app goes through these hooks, so
 // cache keys and invalidation rules live in one place.
@@ -28,7 +28,9 @@ export const queryKeys = {
     all: ['admin'] as const,
     analytics: () => ['admin', 'analytics'] as const,
     users: () => ['admin', 'users'] as const,
+    invites: () => ['admin', 'invites'] as const,
   },
+  org: () => ['org'] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -81,6 +83,31 @@ export function useAnalytics() {
     queryKey: queryKeys.admin.analytics(),
     queryFn: async () => (await adminApi.getAnalytics()).data,
     meta: { errorMessage: 'Failed to load analytics' },
+  });
+}
+
+export function useOrganization() {
+  return useQuery({
+    queryKey: queryKeys.org(),
+    queryFn: async () => (await orgApi.get()).data,
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useInvitePreview(token: string | null) {
+  return useQuery({
+    queryKey: ['invite-preview', token] as const,
+    queryFn: async () => (await authApi.invitePreview(token!)).data,
+    enabled: !!token,
+    retry: false,
+  });
+}
+
+export function useInvites() {
+  return useQuery({
+    queryKey: queryKeys.admin.invites(),
+    queryFn: async () => (await adminApi.listInvites()).data,
+    meta: { errorMessage: 'Failed to load invites' },
   });
 }
 
@@ -149,6 +176,43 @@ export function useUpdateUserRole() {
       queryClient.setQueryData<User[]>(queryKeys.admin.users(), (users) =>
         users?.map((u) => (u.id === updated.id ? updated : u)),
       );
+    },
+  });
+}
+
+export function useCreateInvite() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CreateInvitePayload) => (await adminApi.createInvite(input)).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.admin.invites() }),
+  });
+}
+
+export function useResendInvite() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await adminApi.resendInvite(id)).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.admin.invites() }),
+  });
+}
+
+export function useRevokeInvite() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => adminApi.revokeInvite(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.admin.invites() }),
+  });
+}
+
+export function useRemoveMember() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => adminApi.removeUser(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.org() });
+      // They may have been in approver groups.
+      queryClient.invalidateQueries({ queryKey: queryKeys.groups.all });
     },
   });
 }

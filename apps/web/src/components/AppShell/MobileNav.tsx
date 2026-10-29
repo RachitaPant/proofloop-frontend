@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, FileText, GitBranch, Home, UserCheck } from 'lucide-react';
+import { FileText, GitBranch, Home, Settings2, UserCheck } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { Role } from '@/types';
 import { cn } from '@/lib/cn';
@@ -22,7 +22,7 @@ const ITEMS = [
 export default function MobileNav() {
   const pathname = usePathname();
   const { user } = useAuth();
-  const items = user?.role === Role.ADMIN ? [...ITEMS, { href: '/admin', label: 'Analytics', icon: BarChart3 }] : ITEMS;
+  const items = user?.role === Role.ADMIN ? [...ITEMS, { href: '/admin', label: 'Admin', icon: Settings2 }] : ITEMS;
 
   // Nested pages (a request's detail) keep their section highlighted.
   const isActive = (href: string) => (href === '/dashboard' ? pathname === href : pathname.startsWith(href));

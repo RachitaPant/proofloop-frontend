@@ -9,10 +9,20 @@ import type { AuthResponse, User } from '@/types';
 import { authApi, setSessionExpiredHandler } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';
 
+export interface RegisterArgs {
+  name: string;
+  email: string;
+  password: string;
+  /** Creating an organisation: the sign-up becomes its owner. */
+  organizationName?: string;
+  /** Joining an organisation through an invite link. */
+  inviteToken?: string;
+}
+
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string) => Promise<void>;
+  register: (input: RegisterArgs) => Promise<void>;
   logout: () => Promise<void>;
   /** True until the first /auth/me answer arrives. */
   isLoading: boolean;
@@ -22,7 +32,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const meQueryKey = ['auth', 'me'] as const;
 
-const toUser = ({ id, name, email, role }: AuthResponse): User => ({ id, name, email, role });
+const toUser = ({ id, name, email, role, orgId, isOwner }: AuthResponse): User => ({ id, name, email, role, orgId, isOwner });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -83,10 +93,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const register = useCallback(
-    async (name: string, email: string, password: string) => {
+    async (input: RegisterArgs) => {
       try {
-        const { data } = await authApi.register({ name, email, password });
-        startSession(data, 'Registered successfully!');
+        const { data } = await authApi.register(input);
+        startSession(data, input.inviteToken ? 'Welcome to the team!' : 'Organisation created!');
       } catch (error) {
         toast.error(getErrorMessage(error, 'Registration failed'));
         throw error;
