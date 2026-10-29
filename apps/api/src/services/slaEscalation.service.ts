@@ -11,8 +11,8 @@ const HOUR_MS = 60 * 60 * 1000;
 // (escalatedSteps + escalated + originalRequiredRole); the shared workflow
 // template is never modified, so other requests on the same workflow are
 // unaffected. Parallel steps escalate independently.
-export async function checkAndEscalateRequests(): Promise<number> {
-  const activeRequests = await Request.find({ status: { $in: ACTIVE_STATUSES } });
+export async function checkAndEscalateRequests(orgId?: string): Promise<number> {
+  const activeRequests = await Request.find({ ...(orgId ? { orgId } : {}), status: { $in: ACTIVE_STATUSES } });
 
   const workflowIds = [...new Set(activeRequests.map((r) => r.workflowId))];
   const workflows = await Workflow.find({ _id: { $in: workflowIds } }).catch(() => []);

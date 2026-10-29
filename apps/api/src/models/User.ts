@@ -8,6 +8,8 @@ export interface IUser {
   role: Role;
   /** The organisation this user belongs to (and their role applies in). */
   orgId: string;
+  /** The organisation's creator: its super admin. Can't be demoted or removed. */
+  isOwner?: boolean;
   createdAt: Date;
 }
 
@@ -17,7 +19,8 @@ const userSchema = new Schema<IUser>(
     email: { type: String, required: true, unique: true },
     passwordHash: { type: String, required: true },
     role: { type: String, enum: ['USER', 'REVIEWER', 'ADMIN'], required: true },
-    orgId: { type: String, index: true },
+    orgId: { type: String, required: true, index: true },
+    isOwner: { type: Boolean, default: false },
   },
   {
     collection: 'users',

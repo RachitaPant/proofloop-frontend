@@ -3,11 +3,11 @@ import { Request } from '../models/Request';
 import { Workflow } from '../models/Workflow';
 import { User } from '../models/User';
 
-export async function getAnalytics(): Promise<Analytics> {
+export async function getAnalytics(orgId: string): Promise<Analytics> {
   const [byStatus, totalWorkflows, totalUsers] = await Promise.all([
-    Request.aggregate<{ _id: string; count: number }>([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
-    Workflow.countDocuments(),
-    User.countDocuments(),
+    Request.aggregate<{ _id: string; count: number }>([{ $match: { orgId } }, { $group: { _id: '$status', count: { $sum: 1 } } }]),
+    Workflow.countDocuments({ orgId }),
+    User.countDocuments({ orgId }),
   ]);
 
   const count = (status: string) => byStatus.find((s) => s._id === status)?.count ?? 0;

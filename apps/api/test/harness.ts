@@ -3,7 +3,6 @@
 import assert from 'node:assert/strict';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
-import bcrypt from 'bcryptjs';
 import supertest from 'supertest';
 import type { CreateWorkflowPayload, Role } from '@proofloop/shared';
 
@@ -11,7 +10,10 @@ export interface Harness {
   api: ReturnType<typeof supertest>;
   ids: Record<string, string>;
   auth: (key: string) => { Authorization: string };
-  registerAs: (key: string, role: Role) => Promise<void>;
+  /** Creates a new organisation whose owner (an ADMIN) is `key`. */
+  registerOwner: (key: string, organizationName: string) => Promise<void>;
+  /** Joins `ownerKey`'s organisation (default: the main test org) through an invite. */
+  registerAs: (key: string, role: Role, ownerKey?: string) => Promise<void>;
   createWorkflow: (key: string, workflow: Omit<CreateWorkflowPayload, 'name'> & { name?: string }) => Promise<any>;
   createRequest: (key: string, workflowId: string, fields?: Record<string, string | number>) => Promise<any>;
   stop: () => Promise<void>;
@@ -28,34 +30,32 @@ export async function startHarness(): Promise<Harness> {
   const app = (await import('../src/app')).default;
   const api = supertest(app);
   await (await import('../src/config/db')).connectDB();
-  const { User } = await import('../src/models/User');
 
   const tokens: Record<string, string> = {};
   const ids: Record<string, string> = {};
   const auth = (key: string) => ({ Authorization: `Bearer ${tokens[key]}` });
 
-  const login = async (key: string, email: string) => {
-    const res = await api.post('/api/auth/login').send({ email, password: 'password123' }).expect(200);
-    tokens[key] = res.body.token;
+  // Every organisation starts with a self-registered owner (an ADMIN)...
+  const registerOwner = async (key: string, organizationName: string) => {
+    const res = await api
+      .post('/api/auth/register')
+      .send({ name: key, email: `${key}@test.dev`, password: 'password123', organizationName })
+      .expect(200);
     ids[key] = res.body.id;
+    tokens[key] = res.body.token;
   };
+  await registerOwner('admin', 'Test Org');
 
-  const admin = await User.create({
-    name: 'admin',
-    email: 'admin@test.dev',
-    passwordHash: await bcrypt.hash('password123', 10),
-    role: 'ADMIN',
-  });
-  ids.admin = admin.id;
-  await login('admin', 'admin@test.dev');
-
-  const registerAs = async (key: string, role: Role) => {
+  // ...and everyone else joins through a real invite.
+  const registerAs = async (key: string, role: Role, ownerKey = 'admin') => {
     const email = `${key}@test.dev`;
-    const res = await api.post('/api/auth/register').send({ name: key, email, password: 'password123' }).expect(200);
-    if (role !== 'USER') {
-      await api.patch(`/api/admin/users/${res.body.id}/role`).set(auth('admin')).send({ role }).expect(200);
-    }
-    await login(key, email);
+    const invite = await api.post('/api/admin/invites').set(auth(ownerKey)).send({ email, role }).expect(201);
+    const res = await api
+      .post('/api/auth/register')
+      .send({ name: key, email, password: 'password123', inviteToken: invite.body.token })
+      .expect(200);
+    ids[key] = res.body.id;
+    tokens[key] = res.body.token;
   };
 
   const createWorkflow: Harness['createWorkflow'] = async (key, workflow) => {
@@ -77,6 +77,7 @@ export async function startHarness(): Promise<Harness> {
     api,
     ids,
     auth,
+    registerOwner,
     registerAs,
     createWorkflow,
     createRequest,

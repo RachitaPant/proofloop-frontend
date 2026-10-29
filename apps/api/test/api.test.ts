@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { afterAll, beforeAll, describe, test } from 'vitest';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
-import bcrypt from 'bcryptjs';
 import supertest from 'supertest';
 import type { Role } from '@proofloop/shared';
 
@@ -30,11 +29,12 @@ async function login(email: string, password: string) {
 
 async function registerAs(key: string, role: Role) {
   const email = `${key}@test.dev`;
-  const res = await api.post('/api/auth/register').send({ name: key, email, password: 'password123' }).expect(200);
+  const invite = await api.post('/api/admin/invites').set(auth('admin')).send({ email, role }).expect(201);
+  const res = await api
+    .post('/api/auth/register')
+    .send({ name: key, email, password: 'password123', inviteToken: invite.body.token })
+    .expect(200);
   ids[key] = res.body.id;
-  if (role !== 'USER') {
-    await api.patch(`/api/admin/users/${res.body.id}/role`).set(auth('admin')).send({ role }).expect(200);
-  }
   tokens[key] = (await login(email, 'password123')).token;
 }
 
@@ -79,14 +79,12 @@ beforeAll(async () => {
   requestService = await import('../src/services/request.service');
 
   await (await import('../src/config/db')).connectDB();
-  const admin = await m.User.create({
-    name: 'admin',
-    email: 'admin@test.dev',
-    passwordHash: await bcrypt.hash('password123', 10),
-    role: 'ADMIN',
-  });
-  ids.admin = admin.id;
-  tokens.admin = (await login('admin@test.dev', 'password123')).token;
+  const owner = await api
+    .post('/api/auth/register')
+    .send({ name: 'admin', email: 'admin@test.dev', password: 'password123', organizationName: 'Test Org' })
+    .expect(200);
+  ids.admin = owner.body.id;
+  tokens.admin = owner.body.token;
 
   await registerAs('alice', 'USER');
   await registerAs('mallory', 'USER');
@@ -100,10 +98,15 @@ afterAll(async () => {
 });
 
 describe('auth & roles', () => {
-  test('self-registration ignores a requested role and always creates USER', async () => {
+  test('sign-up ignores a requested role: an invite decides it', async () => {
+    const invite = await api
+      .post('/api/admin/invites')
+      .set(auth('admin'))
+      .send({ email: 'eve@test.dev', role: 'USER' })
+      .expect(201);
     const res = await api
       .post('/api/auth/register')
-      .send({ name: 'eve', email: 'eve@test.dev', password: 'password123', role: 'ADMIN' })
+      .send({ name: 'eve', email: 'eve@test.dev', password: 'password123', inviteToken: invite.body.token, role: 'ADMIN' })
       .expect(200);
     assert.equal(res.body.role, 'USER');
   });

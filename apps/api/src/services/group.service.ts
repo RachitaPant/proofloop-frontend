@@ -19,46 +19,47 @@ async function withMembers(groups: ApproverGroupDoc[]) {
 }
 
 /** Any signed-in user can see groups (the workflow builder needs them). */
-export async function listGroups() {
-  return withMembers(await ApproverGroup.find().sort({ name: 1 }));
+export async function listGroups(user: UserDoc) {
+  return withMembers(await ApproverGroup.find({ orgId: user.orgId }).sort({ name: 1 }));
 }
 
-async function checkMembers(memberIds: string[]) {
+async function checkMembers(orgId: string, memberIds: string[]) {
   const unique = [...new Set(memberIds)];
-  const found = await User.countDocuments({ _id: { $in: unique } });
+  const found = await User.countDocuments({ orgId, _id: { $in: unique } });
   if (found !== unique.length) throw new ValidationException({ memberIds: 'Some members are not existing users' });
   return unique;
 }
 
-async function checkNameFree(name: string, exceptId?: string) {
-  const clash = await ApproverGroup.findOne({ name }).collation({ locale: 'en', strength: 2 });
+async function checkNameFree(orgId: string, name: string, exceptId?: string) {
+  const clash = await ApproverGroup.findOne({ orgId, name }).collation({ locale: 'en', strength: 2 });
   if (clash && clash.id !== exceptId) throw new ConflictException(`A group named "${name}" already exists`);
 }
 
 export async function createGroup(admin: UserDoc, { name, description, memberIds }: ApproverGroupInput) {
-  await checkNameFree(name);
+  await checkNameFree(admin.orgId, name);
   const group = await ApproverGroup.create({
+    orgId: admin.orgId,
     name,
     description,
-    memberIds: await checkMembers(memberIds),
+    memberIds: await checkMembers(admin.orgId, memberIds),
     createdBy: admin.id,
   });
   return (await withMembers([group]))[0];
 }
 
-export async function updateGroup(id: string, { name, description, memberIds }: ApproverGroupInput) {
-  const group = await ApproverGroup.findById(id).catch(() => null);
+export async function updateGroup(admin: UserDoc, id: string, { name, description, memberIds }: ApproverGroupInput) {
+  const group = await ApproverGroup.findOne({ _id: id, orgId: admin.orgId }).catch(() => null);
   if (!group) throw new ResourceNotFoundException('Approver group not found');
-  await checkNameFree(name, group.id);
+  await checkNameFree(admin.orgId, name, group.id);
 
   group.name = name;
   group.description = description;
-  group.memberIds = await checkMembers(memberIds);
+  group.memberIds = await checkMembers(admin.orgId, memberIds);
   await group.save();
 
   // Workflows show the group's name; keep it current.
   await Workflow.updateMany(
-    { 'steps.approverGroupId': group.id },
+    { orgId: admin.orgId, 'steps.approverGroupId': group.id },
     { $set: { 'steps.$[step].approverGroupName': name } },
     { arrayFilters: [{ 'step.approverGroupId': group.id }] },
   );
@@ -66,10 +67,10 @@ export async function updateGroup(id: string, { name, description, memberIds }: 
 }
 
 /** Refused while any workflow still routes steps to the group. */
-export async function deleteGroup(id: string) {
-  const group = await ApproverGroup.findById(id).catch(() => null);
+export async function deleteGroup(admin: UserDoc, id: string) {
+  const group = await ApproverGroup.findOne({ _id: id, orgId: admin.orgId }).catch(() => null);
   if (!group) throw new ResourceNotFoundException('Approver group not found');
-  const inUse = await Workflow.countDocuments({ 'steps.approverGroupId': group.id });
+  const inUse = await Workflow.countDocuments({ orgId: admin.orgId, 'steps.approverGroupId': group.id });
   if (inUse > 0) {
     throw new ConflictException(`This group is used by ${inUse} workflow(s); delete or change those first`);
   }

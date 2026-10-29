@@ -207,8 +207,8 @@ export type AiWorkflowDraftInput = z.infer<typeof AiWorkflowDraftInput>;
 
 export const CreateInviteInput = z.object({
   role: RoleSchema.default('USER'),
-  /** Optional: only this address may use the invite. */
-  email: z.email('Email must be valid').nullish(),
+  /** The address being invited: only this address may use the invite. */
+  email: z.email('Email must be valid').max(200),
 });
 export type CreateInviteInput = z.infer<typeof CreateInviteInput>;
 export type CreateInvitePayload = z.input<typeof CreateInviteInput>;
@@ -234,6 +234,8 @@ export interface User {
   /** The user's role inside their organisation. */
   role: Role;
   orgId?: string;
+  /** The organisation's owner (its super admin): can't be demoted or removed. */
+  isOwner?: boolean;
   createdAt?: string;
 }
 
@@ -247,15 +249,20 @@ export interface Organization {
 export interface Invite {
   id: string;
   role: Role;
-  email?: string | null;
+  email: string;
   createdByName: string;
   expiresAt: string;
   createdAt: string;
 }
 
-/** Returned once, when an invite is created: the only time the link exists. */
+/** How delivery of an invite email went. The link works either way. */
+export type EmailStatus = 'sent' | 'failed' | 'not_configured';
+
+/** Returned when an invite is created or re-sent: the only time the link exists. */
 export interface CreatedInvite extends Invite {
   token: string;
+  link: string;
+  emailStatus: EmailStatus;
 }
 
 /** What the join page shows before sign-up. */
@@ -263,7 +270,7 @@ export interface InvitePreview {
   valid: boolean;
   orgName?: string;
   role?: Role;
-  email?: string | null;
+  email?: string;
 }
 
 export interface AuthResponse {

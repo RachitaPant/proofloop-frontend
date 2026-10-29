@@ -8,8 +8,8 @@ export const groupRoutes = Router();
 groupRoutes.use(requireAuth);
 
 // Readable by everyone signed in (workflow builders pick groups); managed by admins.
-groupRoutes.get('/', async (_req, res) => {
-  res.json(await groupService.listGroups());
+groupRoutes.get('/', async (req, res) => {
+  res.json(await groupService.listGroups(currentUser(req)));
 });
 
 groupRoutes.post('/', requireAdmin, validateBody(ApproverGroupInput), async (req, res) => {
@@ -17,10 +17,10 @@ groupRoutes.post('/', requireAdmin, validateBody(ApproverGroupInput), async (req
 });
 
 groupRoutes.put('/:id', requireAdmin, validateBody(ApproverGroupInput), async (req: Request<{ id: string }>, res) => {
-  res.json(await groupService.updateGroup(req.params.id, req.body));
+  res.json(await groupService.updateGroup(currentUser(req), req.params.id, req.body));
 });
 
 groupRoutes.delete('/:id', requireAdmin, async (req: Request<{ id: string }>, res) => {
-  await groupService.deleteGroup(req.params.id);
+  await groupService.deleteGroup(currentUser(req), req.params.id);
   res.status(204).send();
 });

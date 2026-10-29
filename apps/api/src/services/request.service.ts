@@ -89,7 +89,7 @@ export async function loadActorContext(user: UserDoc, workflows: (WorkflowDoc | 
   ];
   const [delegations, groups] = await Promise.all([
     activeDelegationsTo(user),
-    groupIds.length ? ApproverGroup.find({ _id: { $in: groupIds } }) : Promise.resolve([]),
+    groupIds.length ? ApproverGroup.find({ orgId: user.orgId, _id: { $in: groupIds } }) : Promise.resolve([]),
   ]);
   return { delegations, groups: new Map(groups.map((g) => [g.id as string, g])) };
 }
@@ -168,16 +168,16 @@ function canView(user: UserDoc, request: RequestDoc, actionable: ActionableStep[
   return actionable.length > 0;
 }
 
-async function findWorkflow(id: string) {
-  return Workflow.findById(id).catch(() => null);
+async function findWorkflow(orgId: string, id: string) {
+  return Workflow.findOne({ _id: id, orgId }).catch(() => null);
 }
 
 // Loads a request the user is allowed to see. Returns 404 (not 403) for
 // requests they can't see, so IDs can't be probed for existence.
 async function loadVisibleRequest(user: UserDoc, id: string) {
-  const request = await Request.findById(id).catch(() => null);
+  const request = await Request.findOne({ _id: id, orgId: user.orgId }).catch(() => null);
   if (!request) throw new ResourceNotFoundException('Request not found');
-  const workflow = await findWorkflow(request.workflowId);
+  const workflow = await findWorkflow(user.orgId, request.workflowId);
   const actionable = actionableSteps(user, await loadActorContext(user, [workflow]), request, workflow);
   if (!canView(user, request, actionable)) throw new ResourceNotFoundException('Request not found');
   return { request, workflow, actionable };
@@ -196,7 +196,7 @@ function startStage(request: RequestDoc, workflow: WorkflowDoc, stage: number, a
 // ---------------------------------------------------------------------------
 
 export async function createRequest(user: UserDoc, { title, description, workflowId, fields }: CreateRequestInput) {
-  const workflow = await findWorkflow(workflowId);
+  const workflow = await findWorkflow(user.orgId, workflowId);
   if (!workflow) throw new ResourceNotFoundException('Workflow not found');
 
   const { values, errors } = validateFieldValues(workflow.fields ?? [], fields);
@@ -218,6 +218,7 @@ export async function createRequest(user: UserDoc, { title, description, workflo
     description,
     workflowId: workflow.id,
     workflowName: workflow.name,
+    orgId: user.orgId,
     createdBy: user.id,
     createdByName: user.name,
     status: 'PENDING',
@@ -233,16 +234,16 @@ export async function createRequest(user: UserDoc, { title, description, workflo
 }
 
 export async function getMyRequests(user: UserDoc) {
-  const requests = await Request.find({ createdBy: user.id }).sort({ createdAt: -1 });
+  const requests = await Request.find({ orgId: user.orgId, createdBy: user.id }).sort({ createdAt: -1 });
   return requests.map((r) => r.toJSON());
 }
 
 export async function getPendingRequests(user: UserDoc) {
-  const active = await Request.find({ status: { $in: ACTIVE_STATUSES } }).sort({ createdAt: 1 });
+  const active = await Request.find({ orgId: user.orgId, status: { $in: ACTIVE_STATUSES } }).sort({ createdAt: 1 });
 
   // One workflow query (and one delegation + group query) for the whole batch.
   const workflowIds = [...new Set(active.map((r) => r.workflowId))];
-  const workflows = await Workflow.find({ _id: { $in: workflowIds } }).catch(() => []);
+  const workflows = await Workflow.find({ orgId: user.orgId, _id: { $in: workflowIds } }).catch(() => []);
   const byId = new Map(workflows.map((w) => [w.id as string, w]));
   const ctx = await loadActorContext(user, workflows);
 
@@ -282,11 +283,11 @@ async function processRequest(
   comment?: string | null,
   requestedStep?: number | null,
 ) {
-  const request = await Request.findById(requestId).catch(() => null);
+  const request = await Request.findOne({ _id: requestId, orgId: user.orgId }).catch(() => null);
   if (!request) throw new ResourceNotFoundException('Request not found');
   if (!isActive(request)) throw new BadRequestException('Request already finalized');
 
-  const workflow = await findWorkflow(request.workflowId);
+  const workflow = await findWorkflow(user.orgId, request.workflowId);
   if (!workflow) throw new ResourceNotFoundException('Workflow not found');
 
   const pending = pendingSteps(request, workflow);
@@ -454,8 +455,8 @@ export async function appendAiRecommendation(requestId: string, ai: AiRecommenda
   throw new ConflictException('The request changed while the AI was reviewing it. Try again.');
 }
 
-export async function getAllRequests() {
-  const requests = await Request.find().sort({ createdAt: -1 });
+export async function getAllRequests(admin: UserDoc) {
+  const requests = await Request.find({ orgId: admin.orgId }).sort({ createdAt: -1 });
   return requests.map((r) => r.toJSON());
 }
 

@@ -174,7 +174,7 @@ function interpret(reply: LlmReply, validGroupIds: Set<string>): Attempt {
 export async function draftWorkflow(user: UserDoc, prompt: string): Promise<AiWorkflowDraft> {
   if (!isAiEnabled()) throw new ServiceUnavailableException('AI drafting is not enabled on this server');
 
-  const groups = await ApproverGroup.find().sort({ name: 1 }).limit(50);
+  const groups = await ApproverGroup.find({ orgId: user.orgId }).sort({ name: 1 }).limit(50);
   const validGroupIds = new Set(groups.map((g) => g.id as string));
   const groupList = groups.map((g) => ({ id: g.id as string, name: g.name, description: g.description ?? '' }));
   const userMessage =

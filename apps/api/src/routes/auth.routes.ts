@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import { LoginInput, RegisterInput } from '@proofloop/shared';
 import { validateBody } from '../middleware/validate';
@@ -20,6 +20,11 @@ const credentialLimiter = rateLimit({
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   message: { status: 429, error: 'Too Many Requests', message: 'Too many attempts, please try again later.' },
+});
+
+// Lets the join page show which organisation an invite is for before sign-up.
+authRoutes.get('/invite/:token', credentialLimiter, async (req: Request<{ token: string }>, res) => {
+  res.json(await authService.previewInvite(req.params.token));
 });
 
 authRoutes.post('/register', credentialLimiter, validateBody(RegisterInput), async (req, res) => {

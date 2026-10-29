@@ -12,7 +12,7 @@ const MAX_DELEGATION_DAYS = 90;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export async function createDelegation(from: UserDoc, { toEmail, endsAt, note }: CreateDelegationInput) {
-  const to = await User.findOne({ email: toEmail });
+  const to = await User.findOne({ email: toEmail.trim().toLowerCase(), orgId: from.orgId });
   if (!to) throw new ResourceNotFoundException('No user with that email');
   if (to.id === from.id) throw new BadRequestException('You cannot delegate to yourself');
 
@@ -23,10 +23,11 @@ export async function createDelegation(from: UserDoc, { toEmail, endsAt, note }:
     throw new BadRequestException(`A delegation can last at most ${MAX_DELEGATION_DAYS} days`);
   }
 
-  const existing = await Delegation.exists({ fromUserId: from.id, revokedAt: null, endsAt: { $gt: now } });
+  const existing = await Delegation.exists({ orgId: from.orgId, fromUserId: from.id, revokedAt: null, endsAt: { $gt: now } });
   if (existing) throw new ConflictException('You already have an active delegation. End it before creating another.');
 
   const delegation = await Delegation.create({
+    orgId: from.orgId,
     fromUserId: from.id,
     fromUserName: from.name,
     toUserId: to.id,
@@ -41,8 +42,8 @@ export async function createDelegation(from: UserDoc, { toEmail, endsAt, note }:
 
 export async function listMyDelegations(user: UserDoc): Promise<MyDelegations> {
   const [given, received] = await Promise.all([
-    Delegation.find({ fromUserId: user.id }).sort({ createdAt: -1 }).limit(20),
-    Delegation.find({ toUserId: user.id }).sort({ createdAt: -1 }).limit(20),
+    Delegation.find({ orgId: user.orgId, fromUserId: user.id }).sort({ createdAt: -1 }).limit(20),
+    Delegation.find({ orgId: user.orgId, toUserId: user.id }).sort({ createdAt: -1 }).limit(20),
   ]);
   return {
     given: given.map((d) => d.toJSON()),
@@ -52,7 +53,7 @@ export async function listMyDelegations(user: UserDoc): Promise<MyDelegations> {
 
 /** The delegator (or an admin) can end a delegation early. */
 export async function revokeDelegation(user: UserDoc, id: string) {
-  const delegation = await Delegation.findById(id).catch(() => null);
+  const delegation = await Delegation.findOne({ _id: id, orgId: user.orgId }).catch(() => null);
   if (!delegation) throw new ResourceNotFoundException('Delegation not found');
   if (delegation.fromUserId !== user.id && user.role !== 'ADMIN') {
     throw new AccessDeniedException('Only the person who delegated can end this delegation');
@@ -72,6 +73,7 @@ export async function revokeDelegation(user: UserDoc, id: string) {
 export async function activeDelegationsTo(user: UserDoc): Promise<DelegationDoc[]> {
   const now = new Date();
   const delegations = await Delegation.find({
+    orgId: user.orgId,
     toUserId: user.id,
     revokedAt: null,
     startsAt: { $lte: now },
@@ -79,7 +81,7 @@ export async function activeDelegationsTo(user: UserDoc): Promise<DelegationDoc[
   }).sort({ createdAt: 1 });
   if (delegations.length === 0) return [];
 
-  const delegators = await User.find({ _id: { $in: delegations.map((d) => d.fromUserId) } });
+  const delegators = await User.find({ orgId: user.orgId, _id: { $in: delegations.map((d) => d.fromUserId) } });
   const currentRole = new Map(delegators.map((u) => [u.id as string, u.role]));
   return delegations.filter((d) => currentRole.get(d.fromUserId) === d.role);
 }
