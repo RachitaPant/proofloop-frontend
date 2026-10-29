@@ -54,6 +54,7 @@ async function deliver(admin: UserDoc, invite: InviteDoc, token: string, baseUrl
       to: invite.email,
       orgName: org?.name ?? 'your organisation',
       inviterName: admin.name,
+      inviterEmail: admin.email,
       role: invite.role,
       link,
       expiresAt: invite.expiresAt,

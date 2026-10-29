@@ -3,6 +3,8 @@ import type { EmailStatus } from '@proofloop/shared';
 
 export interface Mail {
   to: string;
+  /** Where replies go: a real person's address reads as personal, not bulk. */
+  replyTo?: string;
   subject: string;
   text: string;
   html: string;
@@ -55,6 +57,7 @@ const resend: Transport = async (mail) => {
     body: JSON.stringify({
       from: process.env.MAIL_FROM || 'ProofLoop <onboarding@resend.dev>',
       to: [mail.to],
+      ...(mail.replyTo ? { reply_to: mail.replyTo } : {}),
       subject: mail.subject,
       text: mail.text,
       html: mail.html,

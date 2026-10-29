@@ -19,39 +19,36 @@ interface InviteEmailInput {
   to: string;
   orgName: string;
   inviterName: string;
+  inviterEmail?: string;
   role: Role;
   link: string;
   expiresAt: Date;
 }
 
-export function buildInviteEmail({ to, orgName, inviterName, role, link, expiresAt }: InviteEmailInput): Mail {
+// Deliberately plain: a short note with one link reads as personal mail, while
+// heavily styled templates with buttons look like bulk mail to spam filters.
+export function buildInviteEmail({ to, orgName, inviterName, inviterEmail, role, link, expiresAt }: InviteEmailInput): Mail {
   const org = oneLine(orgName);
   const inviter = oneLine(inviterName);
   const expires = expiresAt.toUTCString().replace(/ GMT$/, ' UTC');
 
   const text = [
-    `${inviter} invited you to join ${org} on ProofLoop as ${ROLE_LABEL[role]}.`,
+    `Hi,`,
     '',
-    `Accept the invitation: ${link}`,
+    `${inviter} added you to ${org} on ProofLoop, as ${ROLE_LABEL[role]}.`,
     '',
-    `The link works once and expires on ${expires}. If you weren't expecting this, you can ignore this email.`,
+    `Join here: ${link}`,
+    '',
+    `The link works once and expires on ${expires}. If you don't know ${inviter}, just ignore this email.`,
+    '',
+    `Reply to this email to reach ${inviter}.`,
   ].join('\n');
 
-  const html = `<!doctype html>
-<html>
-  <body style="margin:0;padding:24px;background:#f4f6fa;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1b2434;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;padding:32px;">
-      <tr><td>
-        <p style="margin:0 0 16px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#6b7686;">ProofLoop</p>
-        <h1 style="margin:0 0 12px;font-size:22px;line-height:1.3;">Join ${escapeHtml(org)}</h1>
-        <p style="margin:0 0 24px;font-size:15px;line-height:1.5;">${escapeHtml(inviter)} invited you to join <strong>${escapeHtml(org)}</strong> as ${escapeHtml(ROLE_LABEL[role])}.</p>
-        <p style="margin:0 0 24px;"><a href="${escapeHtml(link)}" style="display:inline-block;background:#2f5bea;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600;font-size:15px;">Accept invitation</a></p>
-        <p style="margin:0 0 8px;font-size:13px;line-height:1.5;color:#6b7686;">Or paste this link into your browser:<br><span style="word-break:break-all;">${escapeHtml(link)}</span></p>
-        <p style="margin:16px 0 0;font-size:13px;line-height:1.5;color:#6b7686;">The link works once and expires on ${escapeHtml(expires)}. If you weren't expecting this, you can ignore this email.</p>
-      </td></tr>
-    </table>
-  </body>
-</html>`;
+  const html = `<p>Hi,</p>
+<p>${escapeHtml(inviter)} added you to <strong>${escapeHtml(org)}</strong> on ProofLoop, as ${escapeHtml(ROLE_LABEL[role])}.</p>
+<p>Join here: <a href="${escapeHtml(link)}">${escapeHtml(link)}</a></p>
+<p>The link works once and expires on ${escapeHtml(expires)}. If you don't know ${escapeHtml(inviter)}, just ignore this email.</p>
+<p>Reply to this email to reach ${escapeHtml(inviter)}.</p>`;
 
-  return { to, subject: `${inviter} invited you to ${org} on ProofLoop`, text, html };
+  return { to, replyTo: inviterEmail, subject: `${inviter} added you to ${org} on ProofLoop`, text, html };
 }
